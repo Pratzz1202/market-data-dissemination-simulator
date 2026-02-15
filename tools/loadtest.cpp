@@ -520,8 +520,8 @@ int main(int argc, char** argv) {
 
   inprocess.Stop();
 
-  const double elapsed_sec =
-      std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
+  double elapsed_sec{0.0};
+  elapsed_sec = std::chrono::duration<double>(end - start).count();
   const uint64_t total_incrementals = incrementals.load();
   const double throughput = elapsed_sec > 0.0 ? total_incrementals / elapsed_sec : 0.0;
 
