@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: mdd-sim
+        working-directory: .
     steps:
       - uses: actions/checkout@v4
 
