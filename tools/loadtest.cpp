@@ -539,12 +539,24 @@ int main(int argc, char** argv) {
   auto SafePercentile = [&](const std::vector<uint64_t>& v, double p) -> uint64_t {
     return v.empty() ? 0ULL : Percentile(v, p);
   };
-  const uint64_t inc_p50 = Percentile(incremental_latency_copy, 0.50);
-  const uint64_t inc_p99 = Percentile(incremental_latency_copy, 0.99);
-  const uint64_t inc_p999 = Percentile(incremental_latency_copy, 0.999);
-  const uint64_t snap_p50 = Percentile(snapshot_latency_copy, 0.50);
-  const uint64_t snap_p99 = Percentile(snapshot_latency_copy, 0.99);
-  const uint64_t snap_p999 = Percentile(snapshot_latency_copy, 0.999);
+
+  const uint64_t inc_p50 =
+      incremental_latency_copy.empty() ? 0ULL : Percentile(incremental_latency_copy, 0.50);
+
+  const uint64_t inc_p99 =
+      incremental_latency_copy.empty() ? 0ULL : Percentile(incremental_latency_copy, 0.99);
+
+  const uint64_t inc_p999 =
+      incremental_latency_copy.empty() ? 0ULL : Percentile(incremental_latency_copy, 0.999);
+
+  const uint64_t snap_p50 =
+      snapshot_latency_copy.empty() ? 0ULL : Percentile(snapshot_latency_copy, 0.50);
+
+  const uint64_t snap_p99 =
+      snapshot_latency_copy.empty() ? 0ULL : Percentile(snapshot_latency_copy, 0.99);
+
+  const uint64_t snap_p999 =
+      snapshot_latency_copy.empty() ? 0ULL : Percentile(snapshot_latency_copy, 0.999);
 
   auto metrics = mdd::common::GlobalMetrics().Snapshot();
   if (!options.server_metrics_endpoint.empty()) {
