@@ -1,0 +1,70 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mdd-sim
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config \
+            protobuf-compiler libprotobuf-dev libgrpc++-dev grpc-proto \
+            clang-format clang-tidy
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: clang-format check
+        run: |
+          find . -type f \( -name '*.h' -o -name '*.cpp' \) \
+            -not -path './build/*' -not -path './build-asan/*' \
+            | xargs clang-format --dry-run --Werror
+
+      - name: clang-tidy check
+        run: |
+          clang-tidy -p build server/main.cpp server/market_data_service.cpp \
+            client/main.cpp client/client_session.cpp tools/loadtest.cpp
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Benchmark smoke
+        run: |
+          ./build/mdd_loadtest --inprocess_config ./instruments.json --clients 2 --duration_sec 2
+
+  sanitizer-smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mdd-sim
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config \
+            protobuf-compiler libprotobuf-dev libgrpc++-dev grpc-proto
+
+      - name: Configure ASan+UBSan
+        run: cmake -S . -B build-asan -G Ninja -DMDD_SIM_ENABLE_ASAN=ON -DMDD_SIM_ENABLE_UBSAN=ON
+
+      - name: Build
+        run: cmake --build build-asan -j
+
+      - name: Test
+        run: ctest --test-dir build-asan --output-on-failure

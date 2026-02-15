@@ -1,0 +1,17 @@
+{
+  "defaultUpdatesPerSec": 10000,
+  "resetProbabilityPpm": 0,
+  "allowCrossedBooks": false,
+  "instruments": [
+    {
+      "instrumentId": "BTC-USD",
+      "symbol": "BTCUSD",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 5000000,
+      "levelsPerSide": 40,
+      "updatesPerSec": 10000,
+      "volatility": 0.08
+    }
+  ]
+}

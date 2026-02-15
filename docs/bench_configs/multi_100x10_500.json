@@ -1,0 +1,1007 @@
+{
+  "defaultUpdatesPerSec": 500,
+  "resetProbabilityPpm": 0,
+  "allowCrossedBooks": false,
+  "instruments": [
+    {
+      "instrumentId": "SYM-001",
+      "symbol": "SYM001",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 100100,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-002",
+      "symbol": "SYM002",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 100200,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-003",
+      "symbol": "SYM003",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 100300,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-004",
+      "symbol": "SYM004",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 100400,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-005",
+      "symbol": "SYM005",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 100500,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-006",
+      "symbol": "SYM006",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 100600,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-007",
+      "symbol": "SYM007",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 100700,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-008",
+      "symbol": "SYM008",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 100800,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-009",
+      "symbol": "SYM009",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 100900,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-010",
+      "symbol": "SYM010",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 101000,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-011",
+      "symbol": "SYM011",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 101100,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-012",
+      "symbol": "SYM012",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 101200,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-013",
+      "symbol": "SYM013",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 101300,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-014",
+      "symbol": "SYM014",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 101400,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-015",
+      "symbol": "SYM015",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 101500,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-016",
+      "symbol": "SYM016",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 101600,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-017",
+      "symbol": "SYM017",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 101700,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-018",
+      "symbol": "SYM018",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 101800,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-019",
+      "symbol": "SYM019",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 101900,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-020",
+      "symbol": "SYM020",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 102000,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-021",
+      "symbol": "SYM021",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 102100,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-022",
+      "symbol": "SYM022",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 102200,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-023",
+      "symbol": "SYM023",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 102300,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-024",
+      "symbol": "SYM024",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 102400,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-025",
+      "symbol": "SYM025",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 102500,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-026",
+      "symbol": "SYM026",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 102600,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-027",
+      "symbol": "SYM027",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 102700,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-028",
+      "symbol": "SYM028",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 102800,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-029",
+      "symbol": "SYM029",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 102900,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-030",
+      "symbol": "SYM030",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 103000,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-031",
+      "symbol": "SYM031",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 103100,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-032",
+      "symbol": "SYM032",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 103200,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-033",
+      "symbol": "SYM033",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 103300,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-034",
+      "symbol": "SYM034",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 103400,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-035",
+      "symbol": "SYM035",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 103500,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-036",
+      "symbol": "SYM036",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 103600,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-037",
+      "symbol": "SYM037",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 103700,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-038",
+      "symbol": "SYM038",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 103800,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-039",
+      "symbol": "SYM039",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 103900,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-040",
+      "symbol": "SYM040",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 104000,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-041",
+      "symbol": "SYM041",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 104100,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-042",
+      "symbol": "SYM042",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 104200,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-043",
+      "symbol": "SYM043",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 104300,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-044",
+      "symbol": "SYM044",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 104400,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-045",
+      "symbol": "SYM045",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 104500,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-046",
+      "symbol": "SYM046",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 104600,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-047",
+      "symbol": "SYM047",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 104700,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-048",
+      "symbol": "SYM048",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 104800,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-049",
+      "symbol": "SYM049",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 104900,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-050",
+      "symbol": "SYM050",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 105000,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-051",
+      "symbol": "SYM051",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 105100,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-052",
+      "symbol": "SYM052",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 105200,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-053",
+      "symbol": "SYM053",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 105300,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-054",
+      "symbol": "SYM054",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 105400,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-055",
+      "symbol": "SYM055",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 105500,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-056",
+      "symbol": "SYM056",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 105600,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-057",
+      "symbol": "SYM057",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 105700,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-058",
+      "symbol": "SYM058",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 105800,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-059",
+      "symbol": "SYM059",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 105900,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-060",
+      "symbol": "SYM060",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 106000,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-061",
+      "symbol": "SYM061",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 106100,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-062",
+      "symbol": "SYM062",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 106200,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-063",
+      "symbol": "SYM063",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 106300,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-064",
+      "symbol": "SYM064",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 106400,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-065",
+      "symbol": "SYM065",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 106500,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-066",
+      "symbol": "SYM066",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 106600,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-067",
+      "symbol": "SYM067",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 106700,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-068",
+      "symbol": "SYM068",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 106800,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-069",
+      "symbol": "SYM069",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 106900,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-070",
+      "symbol": "SYM070",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 107000,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-071",
+      "symbol": "SYM071",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 107100,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-072",
+      "symbol": "SYM072",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 107200,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-073",
+      "symbol": "SYM073",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 107300,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-074",
+      "symbol": "SYM074",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 107400,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-075",
+      "symbol": "SYM075",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 107500,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-076",
+      "symbol": "SYM076",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 107600,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-077",
+      "symbol": "SYM077",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 107700,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-078",
+      "symbol": "SYM078",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 107800,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-079",
+      "symbol": "SYM079",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 107900,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-080",
+      "symbol": "SYM080",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 108000,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-081",
+      "symbol": "SYM081",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 108100,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-082",
+      "symbol": "SYM082",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 108200,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-083",
+      "symbol": "SYM083",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 108300,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-084",
+      "symbol": "SYM084",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 108400,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-085",
+      "symbol": "SYM085",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 108500,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-086",
+      "symbol": "SYM086",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 108600,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-087",
+      "symbol": "SYM087",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 108700,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-088",
+      "symbol": "SYM088",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 108800,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-089",
+      "symbol": "SYM089",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 108900,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-090",
+      "symbol": "SYM090",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 109000,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-091",
+      "symbol": "SYM091",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 109100,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-092",
+      "symbol": "SYM092",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 109200,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-093",
+      "symbol": "SYM093",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 109300,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-094",
+      "symbol": "SYM094",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 109400,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-095",
+      "symbol": "SYM095",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 109500,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-096",
+      "symbol": "SYM096",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 109600,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-097",
+      "symbol": "SYM097",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 109700,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-098",
+      "symbol": "SYM098",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 109800,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-099",
+      "symbol": "SYM099",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 109900,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    },
+    {
+      "instrumentId": "SYM-100",
+      "symbol": "SYM100",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 110000,
+      "levelsPerSide": 20,
+      "updatesPerSec": 500,
+      "volatility": 0.03
+    }
+  ]
+}

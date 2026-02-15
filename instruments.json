@@ -1,0 +1,37 @@
+{
+  "defaultUpdatesPerSec": 2000,
+  "resetProbabilityPpm": 50,
+  "allowCrossedBooks": false,
+  "instruments": [
+    {
+      "instrumentId": "BTC-USD",
+      "symbol": "BTCUSD",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 5000000,
+      "levelsPerSide": 30,
+      "updatesPerSec": 2000,
+      "volatility": 0.08
+    },
+    {
+      "instrumentId": "ETH-USD",
+      "symbol": "ETHUSD",
+      "publishDepth": 10,
+      "tickSize": 1,
+      "basePrice": 300000,
+      "levelsPerSide": 30,
+      "updatesPerSec": 1500,
+      "volatility": 0.07
+    },
+    {
+      "instrumentId": "AAPL",
+      "symbol": "AAPL",
+      "publishDepth": 15,
+      "tickSize": 1,
+      "basePrice": 19000,
+      "levelsPerSide": 40,
+      "updatesPerSec": 1000,
+      "volatility": 0.03
+    }
+  ]
+}

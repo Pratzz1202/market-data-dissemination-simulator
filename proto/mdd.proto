@@ -1,0 +1,145 @@
+syntax = "proto3";
+
+package mdd;
+
+service MarketDataService {
+  rpc Stream(stream ClientMsg) returns (stream ServerMsg);
+}
+
+enum Side {
+  SIDE_UNSPECIFIED = 0;
+  SIDE_BID = 1;
+  SIDE_ASK = 2;
+}
+
+enum DeltaOp {
+  DELTA_OP_UNSPECIFIED = 0;
+  DELTA_OP_UPSERT = 1;
+  DELTA_OP_REMOVE = 2;
+  DELTA_OP_CLEAR = 3;
+}
+
+message PriceLevel {
+  int64 price = 1;
+  int64 size = 2;
+}
+
+message LevelDelta {
+  Side side = 1;
+  DeltaOp op = 2;
+  int64 price = 3;
+  int64 size = 4;
+}
+
+message ClientHello {
+  uint32 schema_version = 1;
+  string client_build_id = 2;
+  repeated string capabilities = 3;
+}
+
+message Subscribe {
+  string instrument_id = 1;
+  uint32 requested_depth = 2;
+  uint64 subscription_id = 3;
+}
+
+message Unsubscribe {
+  string instrument_id = 1;
+}
+
+message ResyncRequest {
+  string instrument_id = 1;
+  string reason = 2;
+  uint64 last_seq_seen = 3;
+}
+
+message Ping {
+  uint64 client_timestamp_ns = 1;
+}
+
+message ClientMsg {
+  oneof payload {
+    ClientHello hello = 1;
+    Subscribe subscribe = 2;
+    Unsubscribe unsubscribe = 3;
+    ResyncRequest resync_request = 4;
+    Ping ping = 5;
+  }
+}
+
+message ServerHello {
+  uint32 schema_version = 1;
+  string server_build_id = 2;
+  repeated string capabilities = 3;
+}
+
+message Snapshot {
+  string instrument_id = 1;
+  uint64 snapshot_seq = 2;
+  repeated PriceLevel bids = 3;
+  repeated PriceLevel asks = 4;
+  bool is_reset = 5;
+  uint64 server_timestamp_ns = 6;
+  string reason = 7;
+}
+
+message Incremental {
+  string instrument_id = 1;
+  uint64 seq = 2;
+  uint64 prev_seq = 3;
+  repeated LevelDelta updates = 4;
+  uint64 server_timestamp_ns = 5;
+}
+
+message Unsubscribed {
+  string instrument_id = 1;
+  string reason = 2;
+}
+
+message StreamError {
+  string instrument_id = 1;
+  string code = 2;
+  string message = 3;
+}
+
+message Pong {
+  uint64 client_timestamp_ns = 1;
+  uint64 server_timestamp_ns = 2;
+}
+
+message ServerMsg {
+  oneof payload {
+    ServerHello server_hello = 1;
+    Snapshot snapshot = 2;
+    Incremental incremental = 3;
+    Unsubscribed unsubscribed = 4;
+    StreamError error = 5;
+    Pong pong = 6;
+  }
+}
+
+message InstrumentDefinition {
+  string instrument_id = 1;
+  string symbol = 2;
+  uint32 publish_depth = 3;
+  int64 tick_size = 4;
+  int64 base_price = 5;
+  uint32 levels_per_side = 6;
+  uint32 updates_per_sec = 7;
+  double volatility = 8;
+}
+
+message InstrumentsConfig {
+  repeated InstrumentDefinition instruments = 1;
+  uint32 default_updates_per_sec = 2;
+  uint32 reset_probability_ppm = 3;
+  bool allow_crossed_books = 4;
+}
+
+message RecordedEvent {
+  uint64 record_timestamp_ns = 1;
+  oneof event {
+    Snapshot snapshot = 2;
+    Incremental incremental = 3;
+  }
+}

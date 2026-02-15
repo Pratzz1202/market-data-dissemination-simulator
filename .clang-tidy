@@ -1,0 +1,9 @@
+Checks: >
+  bugprone-*,
+  performance-*,
+  modernize-*,
+  readability-*,
+  cppcoreguidelines-*
+WarningsAsErrors: ''
+HeaderFilterRegex: '^(common|server|client|tools|tests)/'
+FormatStyle: file
