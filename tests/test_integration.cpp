@@ -263,15 +263,33 @@ int TestFanoutConsistencyOverGrpc() {
     right = seqs_2;
   }
 
-  const size_t compare_count = std::min(left.size(), right.size());
-  CHECK(compare_count >= 80);
-  for (size_t i = 0; i < compare_count; ++i) {
-    CHECK(left[i] == right[i]);
-    if (i > 0) {
-      CHECK(left[i] > left[i - 1]);
-      CHECK(right[i] > right[i - 1]);
-    }
+  std::vector<uint64_t> common;
+common.reserve(std::min(left.size(), right.size()));
+
+size_t i = 0, j = 0;
+while (i < left.size() && j < right.size()) {
+  if (left[i] == right[j]) {
+    common.push_back(left[i]);
+    ++i;
+    ++j;
+  } else if (left[i] < right[j]) {
+    ++i;
+  } else {
+    ++j;
   }
+}
+
+CHECK(common.size() >= 80);
+
+// Verify the common stream is strictly increasing and contiguous (no drops expected here).
+for (size_t k = 1; k < 80; ++k) {
+  CHECK(common[k] > common[k - 1]);
+  CHECK(common[k] == common[k - 1] + 1);
+}
+
+// Also sanity check each client's own stream is strictly increasing.
+for (size_t k = 1; k < left.size(); ++k) CHECK(left[k] > left[k - 1]);
+for (size_t k = 1; k < right.size(); ++k) CHECK(right[k] > right[k - 1]);
 
   return 0;
 }
