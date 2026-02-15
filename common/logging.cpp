@@ -56,7 +56,7 @@ uint64_t NowNs() {
   return static_cast<uint64_t>(now.time_since_epoch().count());
 }
 
-//std::string ToString(uint64_t value) { return std::to_string(value); }
+// std::string ToString(uint64_t value) { return std::to_string(value); }
 std::string ToString(int64_t value) { return std::to_string(value); }
 std::string ToString(size_t value) { return std::to_string(value); }
 
