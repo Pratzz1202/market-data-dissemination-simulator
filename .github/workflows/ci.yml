@@ -15,7 +15,7 @@ jobs:
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build pkg-config \
-            protobuf-compiler libprotobuf-dev libgrpc++-dev grpc-proto \
+            protobuf-compiler protobuf-compiler-grpc libprotobuf-dev libgrpc++-dev \
             clang-format clang-tidy
 
       - name: Configure
@@ -52,7 +52,7 @@ jobs:
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             build-essential cmake ninja-build pkg-config \
-            protobuf-compiler libprotobuf-dev libgrpc++-dev grpc-proto
+            protobuf-compiler protobuf-compiler-grpc libprotobuf-dev libgrpc++-dev
 
       - name: Configure ASan+UBSan
         run: cmake -S . -B build-asan -G Ninja -DMDD_SIM_ENABLE_ASAN=ON -DMDD_SIM_ENABLE_UBSAN=ON
