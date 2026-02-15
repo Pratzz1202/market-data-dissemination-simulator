@@ -536,7 +536,9 @@ int main(int argc, char** argv) {
     std::lock_guard<std::mutex> lock(snapshot_latency_mu);
     snapshot_latency_copy = snapshot_latencies_ns;
   }
-
+  auto SafePercentile = [&](const std::vector<uint64_t>& v, double p) -> uint64_t {
+    return v.empty() ? 0ULL : Percentile(v, p);
+  };
   const uint64_t inc_p50 = Percentile(incremental_latency_copy, 0.50);
   const uint64_t inc_p99 = Percentile(incremental_latency_copy, 0.99);
   const uint64_t inc_p999 = Percentile(incremental_latency_copy, 0.999);
