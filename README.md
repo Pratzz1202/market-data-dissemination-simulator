@@ -30,7 +30,7 @@ MDD-Sim is a production-style market data distribution system using C++ and gRPC
   - `client_build_id` / `server_build_id`
   - negotiated `capabilities`
 
-See `/Users/pratzz/Desktop/Market Data Dissemination Simulator/mdd-sim/docs/protocol.md` for message semantics.
+See `Market Data Dissemination Simulator/mdd-sim/docs/protocol.md` for message semantics.
 
 ## Repository Layout
 
