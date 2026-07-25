@@ -253,7 +253,7 @@ void Publisher::PublishIncremental(const mdd::Incremental& incremental) {
       }
       if (reset_snapshot_cache.has_value()) {
         mdd::ServerMsg reset_msg;
-        *reset_msg.mutable_snapshot() = *reset_snapshot_cache;
+        *reset_msg.mutable_snapshot() = reset_snapshot_cache.value();
         if (client->EnqueueReset(incremental.instrument_id(), reset_msg)) {
           client->ClearDirty(incremental.instrument_id());
           common::GlobalMetrics().IncrementSnapshots();

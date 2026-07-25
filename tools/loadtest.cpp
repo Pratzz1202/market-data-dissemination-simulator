@@ -671,15 +671,18 @@ int main(int argc, char** argv) {
             << " errors=" << errors.load() << " peak_connected=" << peak_connected.load() << "\n";
 
   if (final_metrics.has_value()) {
-    const auto& current = *final_metrics;
+    // .value() + local copies: cheap (a struct of counters) and keeps
+    // bugprone-unchecked-optional-access satisfied across compiler versions.
+    const mdd::common::MetricsSnapshot current = final_metrics.value();
     if (baseline.has_value()) {
+      const mdd::common::MetricsSnapshot base = baseline.value();
       std::cout << "server_counters_delta backpressure_drops="
-                << current.total_backpressure_drops - baseline->total_backpressure_drops
+                << current.total_backpressure_drops - base.total_backpressure_drops
                 << " loss_simulated_drops="
-                << current.total_loss_simulated_drops - baseline->total_loss_simulated_drops
-                << " resyncs_served=" << current.total_resyncs - baseline->total_resyncs
-                << " incrementals_enqueued="
-                << current.total_incrementals - baseline->total_incrementals << "\n";
+                << current.total_loss_simulated_drops - base.total_loss_simulated_drops
+                << " resyncs_served=" << current.total_resyncs - base.total_resyncs
+                << " incrementals_enqueued=" << current.total_incrementals - base.total_incrementals
+                << "\n";
     } else {
       std::cout << "server_counters_absolute backpressure_drops="
                 << current.total_backpressure_drops
