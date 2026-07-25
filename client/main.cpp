@@ -20,8 +20,10 @@ void HandleSignal(int /*signal*/) { g_stop.store(true); }
 
 // Installed without SA_RESTART so a Ctrl-C interrupts the blocking stdin read
 // in interactive mode instead of hanging until the next Enter.
+// Note: "= {}" rather than "{}" — clang-format 18 (Ubuntu CI) and 21 (macOS)
+// disagree on brace-init spacing after an elaborated type specifier.
 void InstallSignalHandlers() {
-  struct sigaction action{};
+  struct sigaction action = {};
   action.sa_handler = HandleSignal;
   sigemptyset(&action.sa_mask);
   action.sa_flags = 0;
