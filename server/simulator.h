@@ -2,7 +2,6 @@
 
 #include <cstdint>
 #include <mutex>
-#include <optional>
 #include <random>
 #include <string>
 #include <unordered_map>
@@ -25,6 +24,12 @@ class Simulator {
   uint64_t CurrentSeq(const std::string& instrument_id) const;
 
   mdd::Incremental GenerateIncremental(const std::string& instrument_id);
+
+  // depth_override == 0 publishes the full book. Protocol snapshots must
+  // cover every level the incremental stream can touch: a truncated snapshot
+  // plus full-book incrementals silently desyncs clients the moment a remove
+  // uncovers a level the snapshot never carried (sequence numbers stay valid,
+  // so no resync ever fires). Non-zero depth is for display/tooling only.
   mdd::Snapshot BuildSnapshot(const std::string& instrument_id, uint32_t depth_override = 0,
                               bool is_reset = false, const std::string& reason = "") const;
 
@@ -38,14 +43,21 @@ class Simulator {
     uint64_t ticks = 0;
     int64_t mid_price = 0;
     mutable std::mt19937_64 rng;
+    // Instruments are independent; a single simulator-wide mutex would
+    // serialize every instrument thread through one hot lock.
+    mutable std::mutex mu;
   };
 
   static int64_t ClampPositive(int64_t value, int64_t fallback);
-  BookUpdate GenerateBookUpdate(InstrumentState* state);
-  void SeedInitialBook(InstrumentState* state);
+  static BookUpdate GenerateBookUpdate(InstrumentState* state);
+  static void SeedInitialBook(InstrumentState* state);
+
+  const InstrumentState* FindState(const std::string& instrument_id) const;
+  InstrumentState* FindState(const std::string& instrument_id);
 
   RuntimeConfig config_;
-  mutable std::mutex mu_;
+  // Keys and entries are immutable after construction; only the per-entry
+  // state behind each InstrumentState::mu mutates.
   std::unordered_map<std::string, InstrumentState> states_;
 };
 

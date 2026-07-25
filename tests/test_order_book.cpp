@@ -1,17 +1,9 @@
-#include <iostream>
 #include <string>
 
 #include "server/order_book.h"
+#include "tests/test_util.h"
 
 namespace {
-
-#define CHECK(expr)                                                        \
-  do {                                                                     \
-    if (!(expr)) {                                                         \
-      std::cerr << "CHECK failed at line " << __LINE__ << ": " #expr "\n"; \
-      return 1;                                                            \
-    }                                                                      \
-  } while (false)
 
 int TestUpsertAndRemove() {
   mdd::server::OrderBook book;

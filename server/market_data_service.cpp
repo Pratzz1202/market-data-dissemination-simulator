@@ -19,6 +19,10 @@ MarketDataServiceImpl::MarketDataServiceImpl(RuntimeConfig runtime_config, uint6
         return simulator_.BuildSnapshot(instrument_id, 0, is_reset, reason);
       });
 
+  for (const auto& instrument_id : simulator_.InstrumentIds()) {
+    publish_mu_[instrument_id];
+  }
+
   if (!options_.record_path.empty()) {
     std::string error;
     if (!recorder_.Open(options_.record_path, &error)) {
@@ -33,6 +37,16 @@ void MarketDataServiceImpl::StartSimulation() {
   const bool was_running = running_.exchange(true);
   if (was_running) {
     return;
+  }
+
+  // Baseline snapshots make fresh recordings replayable without gaps; the
+  // first recorded incremental would otherwise have no predecessor state and
+  // strict replay would flag it.
+  if (recorder_.Enabled()) {
+    for (const auto& instrument_id : simulator_.InstrumentIds()) {
+      recorder_.RecordSnapshot(
+          simulator_.BuildSnapshot(instrument_id, 0, false, "RECORD_BASELINE"));
+    }
   }
 
   for (const auto& instrument_id : simulator_.InstrumentIds()) {
@@ -129,6 +143,8 @@ void MarketDataServiceImpl::HandleSubscribe(const std::string& client_id,
     return;
   }
 
+  std::lock_guard<std::mutex> publish_lock(publish_mu_.at(instrument_id));
+
   if (!subscriptions_.Subscribe(client_id, instrument_id, subscribe.requested_depth(),
                                 subscribe.subscription_id())) {
     publisher_.SendErrorToClient(client_id, instrument_id, "ALREADY_SUBSCRIBED",
@@ -141,8 +157,9 @@ void MarketDataServiceImpl::HandleSubscribe(const std::string& client_id,
                     {"instrument_id", instrument_id},
                     {"subscription_id", common::ToString(subscribe.subscription_id())}});
 
-  const auto snapshot =
-      simulator_.BuildSnapshot(instrument_id, subscribe.requested_depth(), false, "SUBSCRIBE");
+  // Full-depth snapshot; requested_depth is a client display preference and
+  // must not truncate protocol state (see Simulator::BuildSnapshot).
+  const auto snapshot = simulator_.BuildSnapshot(instrument_id, 0, false, "SUBSCRIBE");
   publisher_.SendSnapshotToClient(client_id, snapshot);
   common::Logger::Instance().Log("snapshot_sent",
                                  {{"client_id", client_id},
@@ -175,9 +192,10 @@ void MarketDataServiceImpl::HandleResync(const std::string& client_id,
     return;
   }
 
-  const uint32_t depth = subscriptions_.RequestedDepth(client_id, instrument_id);
-  const auto snapshot = simulator_.BuildSnapshot(instrument_id, depth, true,
-                                                 "CLIENT_RESYNC:" + resync_request.reason());
+  std::lock_guard<std::mutex> publish_lock(publish_mu_.at(instrument_id));
+
+  const auto snapshot =
+      simulator_.BuildSnapshot(instrument_id, 0, true, "CLIENT_RESYNC:" + resync_request.reason());
 
   publisher_.SendSnapshotToClient(client_id, snapshot);
   common::GlobalMetrics().IncrementResyncs();
@@ -200,35 +218,43 @@ void MarketDataServiceImpl::RunInstrumentLoop(const std::string& instrument_id) 
   const auto period =
       std::chrono::nanoseconds(1000000000ull / std::max<uint32_t>(1, updates_per_sec));
   auto next = std::chrono::steady_clock::now();
+  std::mutex& publish_mu = publish_mu_.at(instrument_id);
+  auto& logger = common::Logger::Instance();
 
   while (running_.load()) {
     next += period;
 
     try {
+      std::lock_guard<std::mutex> publish_lock(publish_mu);
       const auto incremental = simulator_.GenerateIncremental(instrument_id);
+
+      // The record stream captures generated truth. --drop_every_n simulates
+      // publish loss only, so dropped seqs are still recorded and replays
+      // stay gap-free.
+      if (recorder_.Enabled()) {
+        recorder_.RecordIncremental(incremental);
+      }
+
       if (options_.drop_every_n > 0 && incremental.seq() % options_.drop_every_n == 0) {
         const auto subscribers = subscriptions_.SubscribersFor(instrument_id);
         const uint64_t dropped_subscribers = static_cast<uint64_t>(subscribers.size());
         if (dropped_subscribers > 0) {
           common::GlobalMetrics().IncrementLossSimulatedDrops(dropped_subscribers);
         }
-        common::Logger::Instance().Log(
-            "loss_simulation_drop",
-            {{"instrument_id", instrument_id},
-             {"seq", common::ToString(incremental.seq())},
-             {"dropped_subscribers", common::ToString(dropped_subscribers)}});
+        logger.Log("loss_simulation_drop",
+                   {{"instrument_id", instrument_id},
+                    {"seq", common::ToString(incremental.seq())},
+                    {"dropped_subscribers", common::ToString(dropped_subscribers)}});
       } else {
         publisher_.PublishIncremental(incremental);
-        if (recorder_.Enabled()) {
-          recorder_.RecordIncremental(incremental);
+        if (logger.DebugEnabled()) {
+          logger.LogDebug(
+              "incremental_sent",
+              {{"instrument_id", instrument_id},
+               {"seq", common::ToString(incremental.seq())},
+               {"client_count",
+                common::ToString(subscriptions_.SubscribersFor(instrument_id).size())}});
         }
-
-        common::Logger::Instance().Log(
-            "incremental_sent",
-            {{"instrument_id", instrument_id},
-             {"seq", common::ToString(incremental.seq())},
-             {"client_count",
-              common::ToString(subscriptions_.SubscribersFor(instrument_id).size())}});
       }
 
       if (simulator_.ShouldEmitReset(instrument_id)) {

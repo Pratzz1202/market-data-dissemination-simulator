@@ -1,19 +1,23 @@
 #include "common/recording.h"
 
-#include <cstring>
-
 #include "common/logging.h"
 
 namespace mdd::common {
 
 namespace {
 
+// A single recorded event is one snapshot or one incremental; anything past
+// this bound means a corrupt or foreign file, not real data.
+constexpr uint32_t kMaxRecordBytes = 64u * 1024u * 1024u;
+
+// The length prefix is encoded little-endian byte by byte so record files are
+// portable across hosts regardless of native endianness.
 bool WriteSizedMessage(std::ostream* out, const google::protobuf::Message& msg) {
   if (out == nullptr) {
     return false;
   }
   const auto size_u64 = msg.ByteSizeLong();
-  if (size_u64 > static_cast<size_t>(UINT32_MAX)) {
+  if (size_u64 > static_cast<size_t>(kMaxRecordBytes)) {
     return false;
   }
 
@@ -24,7 +28,13 @@ bool WriteSizedMessage(std::ostream* out, const google::protobuf::Message& msg) 
     return false;
   }
 
-  out->write(reinterpret_cast<const char*>(&size), sizeof(size));
+  const char header[4] = {
+      static_cast<char>(size & 0xFFu),
+      static_cast<char>((size >> 8u) & 0xFFu),
+      static_cast<char>((size >> 16u) & 0xFFu),
+      static_cast<char>((size >> 24u) & 0xFFu),
+  };
+  out->write(header, sizeof(header));
   out->write(payload.data(), static_cast<std::streamsize>(payload.size()));
   return out->good();
 }
@@ -33,9 +43,16 @@ bool ReadSizedMessage(std::istream* in, google::protobuf::Message* msg) {
   if (in == nullptr || msg == nullptr) {
     return false;
   }
-  uint32_t size = 0;
-  in->read(reinterpret_cast<char*>(&size), sizeof(size));
+  char header[4] = {};
+  in->read(header, sizeof(header));
   if (!in->good()) {
+    return false;
+  }
+  const uint32_t size = static_cast<uint32_t>(static_cast<unsigned char>(header[0])) |
+                        (static_cast<uint32_t>(static_cast<unsigned char>(header[1])) << 8u) |
+                        (static_cast<uint32_t>(static_cast<unsigned char>(header[2])) << 16u) |
+                        (static_cast<uint32_t>(static_cast<unsigned char>(header[3])) << 24u);
+  if (size > kMaxRecordBytes) {
     return false;
   }
 

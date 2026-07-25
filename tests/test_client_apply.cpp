@@ -1,16 +1,7 @@
-#include <iostream>
-
 #include "client/apply_engine.h"
+#include "tests/test_util.h"
 
 namespace {
-
-#define CHECK(expr)                                                        \
-  do {                                                                     \
-    if (!(expr)) {                                                         \
-      std::cerr << "CHECK failed at line " << __LINE__ << ": " #expr "\n"; \
-      return 1;                                                            \
-    }                                                                      \
-  } while (false)
 
 mdd::Snapshot BuildSnapshot(const std::string& instrument_id, uint64_t seq) {
   mdd::Snapshot snapshot;

@@ -1,7 +1,9 @@
 #include "common/config_loader.h"
 
+#include <cmath>
 #include <fstream>
 #include <sstream>
+#include <unordered_set>
 
 #include "google/protobuf/util/json_util.h"
 
@@ -15,10 +17,17 @@ bool ValidateConfig(const mdd::InstrumentsConfig& config, std::string* error) {
     return false;
   }
 
+  std::unordered_set<std::string> seen_ids;
   for (const auto& instrument : config.instruments()) {
     if (instrument.instrument_id().empty()) {
       if (error != nullptr) {
         *error = "instrument_id cannot be empty";
+      }
+      return false;
+    }
+    if (!seen_ids.insert(instrument.instrument_id()).second) {
+      if (error != nullptr) {
+        *error = "duplicate instrument_id: " + instrument.instrument_id();
       }
       return false;
     }
@@ -37,6 +46,12 @@ bool ValidateConfig(const mdd::InstrumentsConfig& config, std::string* error) {
     if (instrument.base_price() <= 0) {
       if (error != nullptr) {
         *error = "base_price must be > 0 for " + instrument.instrument_id();
+      }
+      return false;
+    }
+    if (instrument.volatility() < 0.0 || !std::isfinite(instrument.volatility())) {
+      if (error != nullptr) {
+        *error = "volatility must be finite and >= 0 for " + instrument.instrument_id();
       }
       return false;
     }

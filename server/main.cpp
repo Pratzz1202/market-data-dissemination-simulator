@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include <atomic>
+#include <cerrno>
 #include <csignal>
 #include <cstring>
 #include <iostream>
@@ -15,6 +16,7 @@
 #include "common/config_loader.h"
 #include "common/logging.h"
 #include "common/metrics.h"
+#include "common/parse.h"
 #include "server/instrument_config.h"
 #include "server/market_data_service.h"
 
@@ -33,6 +35,8 @@ struct CliOptions {
   uint16_t health_port = 0;
   std::string record_path;
   std::string server_build_id = "mdd_server_1.0";
+  std::string log_level = "info";
+  bool help = false;
 };
 
 class HealthHttpServer {
@@ -45,8 +49,8 @@ class HealthHttpServer {
       return true;
     }
 
-    listen_fd_ = ::socket(AF_INET, SOCK_STREAM, 0);
-    if (listen_fd_ < 0) {
+    const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
       running_.store(false);
       if (error != nullptr) {
         *error = "failed to create health socket";
@@ -55,33 +59,32 @@ class HealthHttpServer {
     }
 
     const int one = 1;
-    (void)::setsockopt(listen_fd_, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+    (void)::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
     addr.sin_port = htons(port);
 
-    if (::bind(listen_fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
+    if (::bind(fd, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0) {
       if (error != nullptr) {
         *error = "failed to bind health endpoint on port " + std::to_string(port);
       }
-      ::close(listen_fd_);
-      listen_fd_ = -1;
+      ::close(fd);
       running_.store(false);
       return false;
     }
 
-    if (::listen(listen_fd_, 64) < 0) {
+    if (::listen(fd, 64) < 0) {
       if (error != nullptr) {
         *error = "failed to listen on health endpoint";
       }
-      ::close(listen_fd_);
-      listen_fd_ = -1;
+      ::close(fd);
       running_.store(false);
       return false;
     }
 
+    listen_fd_.store(fd);
     thread_ = std::thread([this] { RunLoop(); });
     return true;
   }
@@ -90,10 +93,10 @@ class HealthHttpServer {
     if (!running_.exchange(false)) {
       return;
     }
-    if (listen_fd_ >= 0) {
-      ::shutdown(listen_fd_, SHUT_RDWR);
-      ::close(listen_fd_);
-      listen_fd_ = -1;
+    const int fd = listen_fd_.exchange(-1);
+    if (fd >= 0) {
+      ::shutdown(fd, SHUT_RDWR);
+      ::close(fd);
     }
     if (thread_.joinable()) {
       thread_.join();
@@ -101,8 +104,9 @@ class HealthHttpServer {
   }
 
  private:
-  void WriteResponse(int fd, int status_code, const std::string& status_text,
-                     const std::string& body, const std::string& content_type = "text/plain") {
+  static void WriteResponse(int fd, int status_code, const std::string& status_text,
+                            const std::string& body,
+                            const std::string& content_type = "text/plain") {
     const std::string response = "HTTP/1.1 " + std::to_string(status_code) + " " + status_text +
                                  "\r\nContent-Type: " + content_type +
                                  "\r\nContent-Length: " + std::to_string(body.size()) +
@@ -110,7 +114,7 @@ class HealthHttpServer {
     (void)::send(fd, response.data(), response.size(), 0);
   }
 
-  void HandleRequest(int fd, const std::string& request) {
+  static void HandleRequest(int fd, const std::string& request) {
     if (request.rfind("GET /healthz", 0) == 0 || request.rfind("GET /readyz", 0) == 0) {
       WriteResponse(fd, 200, "OK", "ok\n");
       return;
@@ -124,11 +128,17 @@ class HealthHttpServer {
 
   void RunLoop() {
     while (running_.load()) {
+      const int fd = listen_fd_.load();
+      if (fd < 0) {
+        break;
+      }
       sockaddr_in client_addr{};
       socklen_t client_len = sizeof(client_addr);
-      const int client_fd =
-          ::accept(listen_fd_, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
+      const int client_fd = ::accept(fd, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
       if (client_fd < 0) {
+        if (errno == EINTR) {
+          continue;
+        }
         if (!running_.load()) {
           break;
         }
@@ -146,7 +156,7 @@ class HealthHttpServer {
   }
 
   std::atomic<bool> running_{false};
-  int listen_fd_ = -1;
+  std::atomic<int> listen_fd_{-1};
   std::thread thread_;
 };
 
@@ -162,6 +172,19 @@ bool ParseArgs(int argc, char** argv, CliOptions* options, std::string* error) {
       }
       return argv[++i];
     };
+    auto require_number = [&](auto* out) {
+      const char* value = require_value(arg);
+      if (value == nullptr) {
+        return false;
+      }
+      if (!mdd::common::ParseNumber(value, out)) {
+        if (error != nullptr) {
+          *error = "invalid numeric value for " + arg + ": " + value;
+        }
+        return false;
+      }
+      return true;
+    };
 
     if (arg == "--config") {
       const char* value = require_value(arg);
@@ -172,21 +195,13 @@ bool ParseArgs(int argc, char** argv, CliOptions* options, std::string* error) {
       if (value == nullptr) return false;
       options->address = value;
     } else if (arg == "--seed") {
-      const char* value = require_value(arg);
-      if (value == nullptr) return false;
-      options->seed = std::stoull(value);
+      if (!require_number(&options->seed)) return false;
     } else if (arg == "--queue_limit_per_instrument") {
-      const char* value = require_value(arg);
-      if (value == nullptr) return false;
-      options->queue_limit_per_instrument = static_cast<size_t>(std::stoull(value));
+      if (!require_number(&options->queue_limit_per_instrument)) return false;
     } else if (arg == "--drop_every_n") {
-      const char* value = require_value(arg);
-      if (value == nullptr) return false;
-      options->drop_every_n = static_cast<uint32_t>(std::stoul(value));
+      if (!require_number(&options->drop_every_n)) return false;
     } else if (arg == "--health_port") {
-      const char* value = require_value(arg);
-      if (value == nullptr) return false;
-      options->health_port = static_cast<uint16_t>(std::stoul(value));
+      if (!require_number(&options->health_port)) return false;
     } else if (arg == "--record_path") {
       const char* value = require_value(arg);
       if (value == nullptr) return false;
@@ -195,8 +210,19 @@ bool ParseArgs(int argc, char** argv, CliOptions* options, std::string* error) {
       const char* value = require_value(arg);
       if (value == nullptr) return false;
       options->server_build_id = value;
+    } else if (arg == "--log_level") {
+      const char* value = require_value(arg);
+      if (value == nullptr) return false;
+      options->log_level = value;
+      if (options->log_level != "info" && options->log_level != "debug") {
+        if (error != nullptr) {
+          *error = "--log_level must be info or debug";
+        }
+        return false;
+      }
     } else if (arg == "--help") {
-      return false;
+      options->help = true;
+      return true;
     } else {
       if (error != nullptr) {
         *error = "unknown argument: " + arg;
@@ -223,7 +249,9 @@ void PrintUsage() {
             << "  --drop_every_n <n>\n"
             << "  --health_port <port>\n"
             << "  --record_path <file>\n"
-            << "  --server_build_id <id>\n";
+            << "  --server_build_id <id>\n"
+            << "  --log_level <info|debug>   debug adds per-update logs\n"
+            << "  --help\n";
 }
 
 }  // namespace
@@ -237,6 +265,14 @@ int main(int argc, char** argv) {
     }
     PrintUsage();
     return 1;
+  }
+  if (options.help) {
+    PrintUsage();
+    return 0;
+  }
+
+  if (options.log_level == "debug") {
+    mdd::common::Logger::Instance().SetMinLevel(mdd::common::LogLevel::kDebug);
   }
 
   mdd::InstrumentsConfig config_proto;
@@ -279,12 +315,12 @@ int main(int argc, char** argv) {
   }
 
   mdd::common::Logger::Instance().Log(
-      "server_start",
-      {{"config_path", options.config_path},
-       {"seed", mdd::common::ToString(options.seed)},
-       {"address", options.address},
-       {"health_port", mdd::common::ToString(static_cast<uint64_t>(options.health_port))},
-       {"drop_every_n", mdd::common::ToString(static_cast<uint64_t>(options.drop_every_n))}});
+      "server_start", {{"config_path", options.config_path},
+                       {"seed", mdd::common::ToString(options.seed)},
+                       {"address", options.address},
+                       {"health_port", mdd::common::ToString(options.health_port)},
+                       {"drop_every_n", mdd::common::ToString(options.drop_every_n)},
+                       {"log_level", options.log_level}});
 
   service.StartSimulation();
 

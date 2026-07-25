@@ -1,5 +1,4 @@
-#include <cstdio>
-#include <iostream>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -7,16 +6,20 @@
 #include "common/recording.h"
 #include "server/order_book.h"
 #include "server/simulator.h"
+#include "tests/test_util.h"
 
 namespace {
 
-#define CHECK(expr)                                                        \
-  do {                                                                     \
-    if (!(expr)) {                                                         \
-      std::cerr << "CHECK failed at line " << __LINE__ << ": " #expr "\n"; \
-      return 1;                                                            \
-    }                                                                      \
-  } while (false)
+// Removes the record file even when a CHECK fails mid-test.
+struct ScopedTempFile {
+  explicit ScopedTempFile(const std::string& name)
+      : path((std::filesystem::temp_directory_path() / name).string()) {}
+  ~ScopedTempFile() {
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+  }
+  std::string path;
+};
 
 mdd::server::RuntimeConfig BuildRuntimeConfig() {
   mdd::server::RuntimeConfig config;
@@ -103,8 +106,8 @@ int TestDeterministicSequenceWithSeed() {
   }
 
   for (const auto& instrument : instruments) {
-    const auto snap_a = sim_a.BuildSnapshot(instrument, 10, false, "CHECK");
-    const auto snap_b = sim_b.BuildSnapshot(instrument, 10, false, "CHECK");
+    const auto snap_a = sim_a.BuildSnapshot(instrument, 0, false, "CHECK");
+    const auto snap_b = sim_b.BuildSnapshot(instrument, 0, false, "CHECK");
     CHECK(SameSnapshotBookIgnoringMeta(snap_a, snap_b));
   }
 
@@ -115,23 +118,25 @@ int TestRecordReplayFinalStateConsistency() {
   const auto config = BuildRuntimeConfig();
   mdd::server::Simulator simulator(config, 2024);
 
-  const std::string record_path =
-      "/tmp/mdd_replay_determinism_" + mdd::common::ToString(mdd::common::NowNs()) + ".record";
+  const ScopedTempFile record_file("mdd_replay_determinism_" +
+                                   mdd::common::ToString(mdd::common::NowNs()) + ".record");
   mdd::common::Recorder recorder;
   std::string open_error;
-  CHECK(recorder.Open(record_path, &open_error));
+  CHECK(recorder.Open(record_file.path, &open_error));
+
+  // Baseline snapshot first, mirroring what the service records at startup.
+  CHECK(recorder.RecordSnapshot(simulator.BuildSnapshot("BTC-USD", 0, false, "BASELINE")));
 
   for (int i = 0; i < 400; ++i) {
     auto inc = simulator.GenerateIncremental("BTC-USD");
     CHECK(recorder.RecordIncremental(inc));
   }
 
-  const auto expected_snapshot = simulator.BuildSnapshot("BTC-USD", 10, false, "EXPECTED_FINAL");
-  CHECK(recorder.RecordSnapshot(expected_snapshot));
+  const auto expected_snapshot = simulator.BuildSnapshot("BTC-USD", 0, false, "EXPECTED_FINAL");
   recorder.Close();
 
   mdd::common::RecordReader reader;
-  CHECK(reader.Open(record_path, &open_error));
+  CHECK(reader.Open(record_file.path, &open_error));
 
   mdd::server::OrderBook replay_book;
   bool has_seq = false;
@@ -146,7 +151,8 @@ int TestRecordReplayFinalStateConsistency() {
     const auto& event = maybe_event.value();
     if (event.has_incremental()) {
       const auto& incremental = event.incremental();
-      CHECK(!has_seq || incremental.prev_seq() == last_seq);
+      CHECK(has_seq);
+      CHECK(incremental.prev_seq() == last_seq);
 
       std::vector<mdd::server::BookUpdate> updates;
       updates.reserve(incremental.updates_size());
@@ -157,7 +163,6 @@ int TestRecordReplayFinalStateConsistency() {
       std::string apply_error;
       CHECK(replay_book.ApplyBatch(updates, &apply_error));
 
-      has_seq = true;
       last_seq = incremental.seq();
     } else if (event.has_snapshot()) {
       const auto& snapshot = event.snapshot();
@@ -180,8 +185,9 @@ int TestRecordReplayFinalStateConsistency() {
   CHECK(has_seq);
   CHECK(last_seq == expected_snapshot.snapshot_seq());
 
-  const auto replay_bids = replay_book.TopBids(10);
-  const auto replay_asks = replay_book.TopAsks(10);
+  // Full-book comparison against the live simulator state.
+  const auto replay_bids = replay_book.TopBids(replay_book.BidLevels());
+  const auto replay_asks = replay_book.TopAsks(replay_book.AskLevels());
   CHECK(static_cast<int>(replay_bids.size()) == expected_snapshot.bids_size());
   CHECK(static_cast<int>(replay_asks.size()) == expected_snapshot.asks_size());
   for (int i = 0; i < expected_snapshot.bids_size(); ++i) {
@@ -193,7 +199,6 @@ int TestRecordReplayFinalStateConsistency() {
     CHECK(replay_asks[static_cast<size_t>(i)].size == expected_snapshot.asks(i).size());
   }
 
-  std::remove(record_path.c_str());
   return 0;
 }
 

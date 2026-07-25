@@ -30,26 +30,36 @@ int64_t PickPriceFromMap(const Map& levels, std::mt19937_64* rng) {
 }  // namespace
 
 Simulator::Simulator(RuntimeConfig config, uint64_t seed) : config_(std::move(config)) {
-  std::lock_guard<std::mutex> lock(mu_);
   states_.reserve(config_.instruments.size());
   for (size_t i = 0; i < config_.instruments.size(); ++i) {
     const auto& cfg = config_.instruments[i];
-    InstrumentState state;
+    auto [it, inserted] = states_.try_emplace(cfg.instrument_id);
+    if (!inserted) {
+      throw std::runtime_error("duplicate instrument in config: " + cfg.instrument_id);
+    }
+    InstrumentState& state = it->second;
     state.config = cfg;
     state.mid_price = cfg.base_price;
     state.rng.seed(seed + static_cast<uint64_t>(i * 9973 + 1));
     SeedInitialBook(&state);
-    states_.emplace(cfg.instrument_id, std::move(state));
   }
 }
 
+const Simulator::InstrumentState* Simulator::FindState(const std::string& instrument_id) const {
+  const auto it = states_.find(instrument_id);
+  return it == states_.end() ? nullptr : &it->second;
+}
+
+Simulator::InstrumentState* Simulator::FindState(const std::string& instrument_id) {
+  const auto it = states_.find(instrument_id);
+  return it == states_.end() ? nullptr : &it->second;
+}
+
 bool Simulator::HasInstrument(const std::string& instrument_id) const {
-  std::lock_guard<std::mutex> lock(mu_);
-  return states_.find(instrument_id) != states_.end();
+  return FindState(instrument_id) != nullptr;
 }
 
 std::vector<std::string> Simulator::InstrumentIds() const {
-  std::lock_guard<std::mutex> lock(mu_);
   std::vector<std::string> ids;
   ids.reserve(states_.size());
   for (const auto& [instrument_id, _] : states_) {
@@ -60,21 +70,20 @@ std::vector<std::string> Simulator::InstrumentIds() const {
 }
 
 uint32_t Simulator::UpdatesPerSec(const std::string& instrument_id) const {
-  std::lock_guard<std::mutex> lock(mu_);
-  const auto it = states_.find(instrument_id);
-  if (it == states_.end()) {
+  const auto* state = FindState(instrument_id);
+  if (state == nullptr) {
     return config_.default_updates_per_sec;
   }
-  return it->second.config.updates_per_sec;
+  return state->config.updates_per_sec;
 }
 
 uint64_t Simulator::CurrentSeq(const std::string& instrument_id) const {
-  std::lock_guard<std::mutex> lock(mu_);
-  const auto it = states_.find(instrument_id);
-  if (it == states_.end()) {
+  const auto* state = FindState(instrument_id);
+  if (state == nullptr) {
     return 0;
   }
-  return it->second.seq;
+  std::lock_guard<std::mutex> lock(state->mu);
+  return state->seq;
 }
 
 int64_t Simulator::ClampPositive(int64_t value, int64_t fallback) {
@@ -152,13 +161,13 @@ BookUpdate Simulator::GenerateBookUpdate(InstrumentState* state) {
 }
 
 mdd::Incremental Simulator::GenerateIncremental(const std::string& instrument_id) {
-  std::lock_guard<std::mutex> lock(mu_);
-  auto it = states_.find(instrument_id);
-  if (it == states_.end()) {
+  auto* state_ptr = FindState(instrument_id);
+  if (state_ptr == nullptr) {
     throw std::runtime_error("unknown instrument: " + instrument_id);
   }
 
-  InstrumentState& state = it->second;
+  InstrumentState& state = *state_ptr;
+  std::lock_guard<std::mutex> lock(state.mu);
   BookUpdate update = GenerateBookUpdate(&state);
 
   std::string error;
@@ -168,22 +177,22 @@ mdd::Incremental Simulator::GenerateIncremental(const std::string& instrument_id
 
   if (!config_.allow_crossed_books && state.book.IsCrossed()) {
     // Roll back the aggressive update and place a safe top-of-book level.
+    // The remove is an exact rollback only because the book was uncrossed
+    // before the upsert, so no level can pre-exist at the crossing price.
     state.book.Apply(BookUpdate{update.side, UpdateType::kRemove, update.price, 0});
+    const int64_t tick = state.config.tick_size;
     if (update.side == Side::kBid) {
-      const auto best_ask =
-          state.book.BestAsk().value_or(state.mid_price + state.config.tick_size * 2);
-      const int64_t safe_bid = best_ask - state.config.tick_size;
-      state.book.Apply(BookUpdate{Side::kBid, UpdateType::kUpsert,
-                                  ClampPositive(safe_bid, state.config.tick_size),
-                                  std::max<int64_t>(1, update.size)});
-      update.price = ClampPositive(safe_bid, state.config.tick_size);
+      const auto best_ask = state.book.BestAsk().value_or(state.mid_price + tick * 2);
+      const int64_t safe_bid = ClampPositive(best_ask - tick, tick);
+      state.book.Apply(
+          BookUpdate{Side::kBid, UpdateType::kUpsert, safe_bid, std::max<int64_t>(1, update.size)});
+      update.price = safe_bid;
     } else {
-      const auto best_bid =
-          state.book.BestBid().value_or(state.mid_price - state.config.tick_size * 2);
-      const int64_t safe_ask = best_bid + state.config.tick_size;
-      state.book.Apply(BookUpdate{Side::kAsk, UpdateType::kUpsert, ClampPositive(safe_ask, 1),
-                                  std::max<int64_t>(1, update.size)});
-      update.price = ClampPositive(safe_ask, 1);
+      const auto best_bid = state.book.BestBid().value_or(state.mid_price - tick * 2);
+      const int64_t safe_ask = ClampPositive(best_bid + tick, tick);
+      state.book.Apply(
+          BookUpdate{Side::kAsk, UpdateType::kUpsert, safe_ask, std::max<int64_t>(1, update.size)});
+      update.price = safe_ask;
     }
   }
 
@@ -202,14 +211,13 @@ mdd::Incremental Simulator::GenerateIncremental(const std::string& instrument_id
 
 mdd::Snapshot Simulator::BuildSnapshot(const std::string& instrument_id, uint32_t depth_override,
                                        bool is_reset, const std::string& reason) const {
-  std::lock_guard<std::mutex> lock(mu_);
-  const auto it = states_.find(instrument_id);
-  if (it == states_.end()) {
+  const auto* state_ptr = FindState(instrument_id);
+  if (state_ptr == nullptr) {
     throw std::runtime_error("unknown instrument: " + instrument_id);
   }
 
-  const InstrumentState& state = it->second;
-  const uint32_t depth = depth_override == 0 ? state.config.publish_depth : depth_override;
+  const InstrumentState& state = *state_ptr;
+  std::lock_guard<std::mutex> lock(state.mu);
 
   mdd::Snapshot snapshot;
   snapshot.set_instrument_id(instrument_id);
@@ -218,12 +226,14 @@ mdd::Snapshot Simulator::BuildSnapshot(const std::string& instrument_id, uint32_
   snapshot.set_server_timestamp_ns(common::NowNs());
   snapshot.set_reason(reason);
 
-  for (const auto& bid : state.book.TopBids(depth)) {
+  const size_t bid_depth = depth_override == 0 ? state.book.BidLevels() : depth_override;
+  const size_t ask_depth = depth_override == 0 ? state.book.AskLevels() : depth_override;
+  for (const auto& bid : state.book.TopBids(bid_depth)) {
     auto* level = snapshot.add_bids();
     level->set_price(bid.price);
     level->set_size(bid.size);
   }
-  for (const auto& ask : state.book.TopAsks(depth)) {
+  for (const auto& ask : state.book.TopAsks(ask_depth)) {
     auto* level = snapshot.add_asks();
     level->set_price(ask.price);
     level->set_size(ask.size);
@@ -233,17 +243,17 @@ mdd::Snapshot Simulator::BuildSnapshot(const std::string& instrument_id, uint32_
 }
 
 bool Simulator::ShouldEmitReset(const std::string& instrument_id) {
-  std::lock_guard<std::mutex> lock(mu_);
-  const auto it = states_.find(instrument_id);
-  if (it == states_.end()) {
+  auto* state_ptr = FindState(instrument_id);
+  if (state_ptr == nullptr) {
     return false;
   }
   if (config_.reset_probability_ppm == 0) {
     return false;
   }
 
+  std::lock_guard<std::mutex> lock(state_ptr->mu);
   std::uniform_int_distribution<uint32_t> dist(0, 999999);
-  return dist(it->second.rng) < config_.reset_probability_ppm;
+  return dist(state_ptr->rng) < config_.reset_probability_ppm;
 }
 
 }  // namespace mdd::server

@@ -15,16 +15,9 @@
 #include "common/logging.h"
 #include "common/metrics.h"
 #include "server/market_data_service.h"
+#include "tests/test_util.h"
 
 namespace {
-
-#define CHECK(expr)                                                        \
-  do {                                                                     \
-    if (!(expr)) {                                                         \
-      std::cerr << "CHECK failed at line " << __LINE__ << ": " #expr "\n"; \
-      return 1;                                                            \
-    }                                                                      \
-  } while (false)
 
 bool WaitUntil(const std::function<bool()>& predicate, std::chrono::milliseconds timeout,
                std::chrono::milliseconds step = std::chrono::milliseconds(20)) {
@@ -294,12 +287,54 @@ int TestFanoutConsistencyOverGrpc() {
   return 0;
 }
 
+// Drives Simulator and ApplyEngine directly (no gRPC) so the comparison is
+// deterministic: after applying every incremental on top of the initial
+// snapshot, the client book must be byte-identical to the server book. This
+// is the regression test for depth-truncated snapshots, which kept sequence
+// numbers valid while the books silently diverged.
+int TestClientBookMatchesServerBook() {
+  const auto config = BuildConfig(1000);
+  mdd::server::Simulator simulator(config, 4242);
+
+  mdd::client::ApplyEngine engine;
+  engine.SetSubscribed("BTC-USD", 10);
+  engine.OnSnapshot(simulator.BuildSnapshot("BTC-USD", 0, false, "TEST_BASELINE"));
+
+  for (int i = 0; i < 2000; ++i) {
+    const auto incremental = simulator.GenerateIncremental("BTC-USD");
+    const auto result = engine.OnIncremental(incremental);
+    CHECK(result.decision == mdd::client::ApplyDecision::kApplied);
+  }
+
+  const auto server_snapshot = simulator.BuildSnapshot("BTC-USD", 0, false, "TEST_FINAL");
+  const auto state = engine.GetState("BTC-USD");
+  CHECK(state.has_value());
+
+  const size_t probe_depth = static_cast<size_t>(server_snapshot.bids_size()) +
+                             static_cast<size_t>(server_snapshot.asks_size()) + 16;
+  const auto client_bids = state->book.TopBids(probe_depth);
+  const auto client_asks = state->book.TopAsks(probe_depth);
+
+  CHECK(static_cast<int>(client_bids.size()) == server_snapshot.bids_size());
+  CHECK(static_cast<int>(client_asks.size()) == server_snapshot.asks_size());
+  for (int i = 0; i < server_snapshot.bids_size(); ++i) {
+    CHECK(client_bids[static_cast<size_t>(i)].price == server_snapshot.bids(i).price());
+    CHECK(client_bids[static_cast<size_t>(i)].size == server_snapshot.bids(i).size());
+  }
+  for (int i = 0; i < server_snapshot.asks_size(); ++i) {
+    CHECK(client_asks[static_cast<size_t>(i)].price == server_snapshot.asks(i).price());
+    CHECK(client_asks[static_cast<size_t>(i)].size == server_snapshot.asks(i).size());
+  }
+  return 0;
+}
+
 }  // namespace
 
 int main() {
   std::ofstream null_log("/dev/null");
   mdd::common::Logger::Instance().SetOutput(&null_log);
 
+  if (TestClientBookMatchesServerBook() != 0) return 1;
   if (TestSubscribeSnapshotIncrementalOverGrpc() != 0) return 1;
   if (TestGapInjectionAndResyncOverGrpc() != 0) return 1;
   if (TestBackpressureDropAndResetOverGrpc() != 0) return 1;

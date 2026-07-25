@@ -49,46 +49,45 @@ void ClientSession::Stop() {
 }
 
 void ClientSession::SetCallbacks(ClientSessionCallbacks callbacks) {
-  std::lock_guard<std::mutex> lock(callbacks_mu_);
   callbacks_ = std::move(callbacks);
 }
 
 void ClientSession::Subscribe(const std::string& instrument_id, uint32_t depth,
                               uint64_t subscription_id) {
-  if (subscription_id == 0) {
-    std::lock_guard<std::mutex> lock(desired_mu_);
-    subscription_id = subscription_counter_++;
-  }
-
   {
     std::lock_guard<std::mutex> lock(desired_mu_);
+    if (subscription_id == 0) {
+      subscription_id = subscription_counter_++;
+    }
     desired_subscriptions_[instrument_id] = DesiredSubscription{depth, subscription_id};
+
+    mdd::ClientMsg msg;
+    auto* subscribe = msg.mutable_subscribe();
+    subscribe->set_instrument_id(instrument_id);
+    subscribe->set_requested_depth(depth);
+    subscribe->set_subscription_id(subscription_id);
+    // Checked under desired_mu_: Run() flips stream_connected_ under the same
+    // lock after snapshotting the desired set, so a concurrent Subscribe
+    // either lands in that snapshot or observes connected and enqueues here —
+    // never neither (which silently lost the subscription until reconnect).
+    if (stream_connected_.load()) {
+      Enqueue(msg);
+    }
   }
 
   apply_engine_.SetSubscribed(instrument_id, depth);
 
-  mdd::ClientMsg msg;
-  auto* subscribe = msg.mutable_subscribe();
-  subscribe->set_instrument_id(instrument_id);
-  subscribe->set_requested_depth(depth);
-  subscribe->set_subscription_id(subscription_id);
-  if (stream_connected_.load()) {
-    Enqueue(msg);
-  }
-
   if (options_.verbose) {
-    common::Logger::Instance().Log(
-        "subscribe_sent", {{"instrument_id", instrument_id},
-                           {"requested_depth", common::ToString(static_cast<uint64_t>(depth))},
-                           {"subscription_id", common::ToString(subscription_id)}});
+    common::Logger::Instance().Log("subscribe_queued",
+                                   {{"instrument_id", instrument_id},
+                                    {"requested_depth", common::ToString(depth)},
+                                    {"subscription_id", common::ToString(subscription_id)}});
   }
 }
 
 void ClientSession::Unsubscribe(const std::string& instrument_id) {
-  {
-    std::lock_guard<std::mutex> lock(desired_mu_);
-    desired_subscriptions_.erase(instrument_id);
-  }
+  std::lock_guard<std::mutex> lock(desired_mu_);
+  desired_subscriptions_.erase(instrument_id);
 
   mdd::ClientMsg msg;
   msg.mutable_unsubscribe()->set_instrument_id(instrument_id);
@@ -132,10 +131,18 @@ bool ClientSession::WriteInitialHandshake(
 
 bool ClientSession::WriteCurrentSubscriptions(
     grpc::ClientReaderWriter<mdd::ClientMsg, mdd::ServerMsg>* stream) {
+  // Leftovers from a previous connection attempt must not replay onto this
+  // stream (the desired-set snapshot below already covers them).
+  {
+    std::lock_guard<std::mutex> lock(queue_mu_);
+    outbound_queue_.clear();
+  }
+
   std::unordered_map<std::string, DesiredSubscription> copy;
   {
     std::lock_guard<std::mutex> lock(desired_mu_);
     copy = desired_subscriptions_;
+    stream_connected_.store(true);
   }
 
   for (const auto& [instrument_id, sub] : copy) {
@@ -145,6 +152,7 @@ bool ClientSession::WriteCurrentSubscriptions(
     subscribe->set_requested_depth(sub.depth);
     subscribe->set_subscription_id(sub.subscription_id);
     if (!stream->Write(msg)) {
+      stream_connected_.store(false);
       return false;
     }
   }
@@ -192,12 +200,8 @@ void ClientSession::Run() {
     if (options_.verbose) {
       common::Logger::Instance().Log("connected", {{"target", options_.target}});
     }
-    stream_connected_.store(true);
-    {
-      std::lock_guard<std::mutex> lock(callbacks_mu_);
-      if (callbacks_.on_connected) {
-        callbacks_.on_connected();
-      }
+    if (callbacks_.on_connected) {
+      callbacks_.on_connected();
     }
 
     std::atomic<bool> stream_active{true};
@@ -234,11 +238,8 @@ void ClientSession::Run() {
           {{"target", options_.target},
            {"grpc_code", common::ToString(static_cast<int64_t>(status.error_code()))}});
     }
-    {
-      std::lock_guard<std::mutex> lock(callbacks_mu_);
-      if (callbacks_.on_disconnected) {
-        callbacks_.on_disconnected();
-      }
+    if (callbacks_.on_disconnected) {
+      callbacks_.on_disconnected();
     }
 
     if (stop_.load() || !options_.auto_reconnect) {
@@ -298,11 +299,8 @@ void ClientSession::RequestResync(const std::string& instrument_id, const std::s
                                     {"last_seq_seen", common::ToString(last_seq_seen)}});
   }
 
-  {
-    std::lock_guard<std::mutex> lock(callbacks_mu_);
-    if (callbacks_.on_resync_requested) {
-      callbacks_.on_resync_requested(instrument_id);
-    }
+  if (callbacks_.on_resync_requested) {
+    callbacks_.on_resync_requested(instrument_id);
   }
 }
 
@@ -312,20 +310,15 @@ void ClientSession::HandleServerMessage(const mdd::ServerMsg& msg) {
       if (options_.verbose) {
         common::Logger::Instance().Log(
             "server_hello_received",
-            {{"schema_version",
-              common::ToString(static_cast<uint64_t>(msg.server_hello().schema_version()))},
+            {{"schema_version", common::ToString(msg.server_hello().schema_version())},
              {"server_build_id", msg.server_hello().server_build_id()}});
       }
       break;
     }
     case mdd::ServerMsg::kSnapshot: {
       apply_engine_.OnSnapshot(msg.snapshot());
-      if (msg.snapshot().server_timestamp_ns() > 0) {
-        const uint64_t latency = common::NowNs() - msg.snapshot().server_timestamp_ns();
-        std::lock_guard<std::mutex> lock(callbacks_mu_);
-        if (callbacks_.on_snapshot_latency_ns) {
-          callbacks_.on_snapshot_latency_ns(latency);
-        }
+      if (msg.snapshot().server_timestamp_ns() > 0 && callbacks_.on_snapshot_latency_ns) {
+        callbacks_.on_snapshot_latency_ns(common::NowNs() - msg.snapshot().server_timestamp_ns());
       }
       if (options_.verbose) {
         common::Logger::Instance().Log(
@@ -333,7 +326,6 @@ void ClientSession::HandleServerMessage(const mdd::ServerMsg& msg) {
                                   {"snapshot_seq", common::ToString(msg.snapshot().snapshot_seq())},
                                   {"is_reset", common::ToString(msg.snapshot().is_reset())}});
       }
-      std::lock_guard<std::mutex> lock(callbacks_mu_);
       if (callbacks_.on_snapshot) {
         callbacks_.on_snapshot(msg.snapshot());
       }
@@ -346,31 +338,21 @@ void ClientSession::HandleServerMessage(const mdd::ServerMsg& msg) {
       }
       const auto result = apply_engine_.OnIncremental(msg.incremental());
       if (result.decision == ApplyDecision::kApplied) {
-        if (msg.incremental().server_timestamp_ns() > 0) {
-          const uint64_t latency = common::NowNs() - msg.incremental().server_timestamp_ns();
-          std::lock_guard<std::mutex> lock(callbacks_mu_);
-          if (callbacks_.on_incremental_latency_ns) {
-            callbacks_.on_incremental_latency_ns(latency);
-          }
-          if (callbacks_.on_latency_ns) {
-            callbacks_.on_latency_ns(latency);
-          }
+        if (msg.incremental().server_timestamp_ns() > 0 && callbacks_.on_incremental_latency_ns) {
+          callbacks_.on_incremental_latency_ns(common::NowNs() -
+                                               msg.incremental().server_timestamp_ns());
         }
-
-        {
-          std::lock_guard<std::mutex> lock(callbacks_mu_);
-          if (callbacks_.on_incremental_msg) {
-            callbacks_.on_incremental_msg(msg.incremental());
-          }
-          if (callbacks_.on_incremental) {
-            callbacks_.on_incremental();
-          }
+        if (callbacks_.on_incremental_msg) {
+          callbacks_.on_incremental_msg(msg.incremental());
+        }
+        if (callbacks_.on_incremental) {
+          callbacks_.on_incremental();
         }
 
         if (options_.verbose) {
-          common::Logger::Instance().Log("incremental_applied",
-                                         {{"instrument_id", msg.incremental().instrument_id()},
-                                          {"seq", common::ToString(result.seq)}});
+          common::Logger::Instance().LogDebug("incremental_applied",
+                                              {{"instrument_id", msg.incremental().instrument_id()},
+                                               {"seq", common::ToString(result.seq)}});
         }
       } else if (result.decision == ApplyDecision::kNeedResync) {
         if (options_.verbose) {
@@ -400,7 +382,6 @@ void ClientSession::HandleServerMessage(const mdd::ServerMsg& msg) {
                                         {"code", msg.error().code()},
                                         {"message", msg.error().message()}});
       }
-      std::lock_guard<std::mutex> lock(callbacks_mu_);
       if (callbacks_.on_error) {
         callbacks_.on_error(msg.error().code());
       }

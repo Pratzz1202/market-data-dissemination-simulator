@@ -77,6 +77,7 @@ int main(int argc, char** argv) {
   uint64_t total_snapshots = 0;
   uint64_t total_incrementals = 0;
   uint64_t total_gaps = 0;
+  uint64_t total_apply_errors = 0;
 
   while (true) {
     const auto maybe_event = reader.Next();
@@ -126,6 +127,7 @@ int main(int argc, char** argv) {
       }
       std::string apply_error;
       if (!state.book.ApplyBatch(updates, &apply_error)) {
+        total_apply_errors++;
         std::cerr << "apply error for instrument=" << incremental.instrument_id()
                   << " message=" << apply_error << "\n";
       }
@@ -137,19 +139,37 @@ int main(int argc, char** argv) {
     }
   }
 
+  // Final-state integrity: every replayed book must contain only positive
+  // sizes and, since the simulator never publishes crossed books, be
+  // uncrossed. Crossed books are reported separately because a config with
+  // allow_crossed_books could legitimately record them.
+  uint64_t invalid_books = 0;
+  uint64_t crossed_books = 0;
+  for (const auto& [instrument, state] : states) {
+    if (!state.book.Validate(/*allow_crossed_books=*/true)) {
+      invalid_books++;
+    }
+    if (state.book.IsCrossed()) {
+      crossed_books++;
+    }
+  }
+
   std::cout << "=== mdd_replay summary ===\n";
   std::cout << "record_path=" << options.record_path << "\n";
   std::cout << "total_events=" << total_events << " total_snapshots=" << total_snapshots
             << " total_incrementals=" << total_incrementals
-            << " total_gap_detections=" << total_gaps << "\n";
+            << " total_gap_detections=" << total_gaps << " apply_errors=" << total_apply_errors
+            << " invalid_final_books=" << invalid_books << " crossed_final_books=" << crossed_books
+            << "\n";
 
   for (const auto& [instrument, state] : states) {
     std::cout << "instrument=" << instrument << " snapshots=" << state.snapshots
               << " incrementals=" << state.incrementals << " gaps=" << state.gaps
-              << " final_seq=" << state.last_seq << "\n";
+              << " final_seq=" << state.last_seq << " final_bid_levels=" << state.book.BidLevels()
+              << " final_ask_levels=" << state.book.AskLevels() << "\n";
   }
 
-  if (options.strict && total_gaps > 0) {
+  if (options.strict && (total_gaps > 0 || total_apply_errors > 0 || invalid_books > 0)) {
     return 2;
   }
 

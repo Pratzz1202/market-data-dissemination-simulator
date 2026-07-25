@@ -6,8 +6,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include "common/recording.h"
@@ -51,6 +53,12 @@ class MarketDataServiceImpl final : public mdd::MarketDataService::Service {
   SubscriptionManager subscriptions_;
   Publisher publisher_;
   common::Recorder recorder_;
+
+  // Serializes snapshot delivery against incremental fan-out per instrument.
+  // Without it a subscribe/resync snapshot built at seq S can race a
+  // concurrently generated incremental S+1: the reset enqueue wipes it from
+  // the queue and the client immediately gap-detects at S+2.
+  std::unordered_map<std::string, std::mutex> publish_mu_;
 
   std::atomic<bool> running_{false};
   std::vector<std::thread> simulator_threads_;

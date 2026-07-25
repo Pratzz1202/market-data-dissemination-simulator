@@ -29,10 +29,11 @@ struct ClientSessionOptions {
   bool verbose = true;
 };
 
+// Callbacks are invoked from the session's read thread without
+// synchronization; install them via SetCallbacks before Start().
 struct ClientSessionCallbacks {
   std::function<void(uint64_t)> on_incremental_latency_ns;
   std::function<void(uint64_t)> on_snapshot_latency_ns;
-  std::function<void(uint64_t)> on_latency_ns;  // compatibility alias for incremental latency
   std::function<void()> on_incremental;
   std::function<void(const mdd::Incremental&)> on_incremental_msg;
   std::function<void(const mdd::Snapshot&)> on_snapshot;
@@ -54,6 +55,7 @@ class ClientSession {
   void Unsubscribe(const std::string& instrument_id);
   void Ping();
 
+  // Must be called before Start(); callbacks run on the read thread.
   void SetCallbacks(ClientSessionCallbacks callbacks);
 
   std::optional<InstrumentState> GetInstrumentState(const std::string& instrument_id) const;
@@ -80,8 +82,7 @@ class ClientSession {
   std::shared_ptr<grpc::Channel> channel_;
   std::unique_ptr<mdd::MarketDataService::Stub> stub_;
 
-  mutable std::mutex callbacks_mu_;
-  ClientSessionCallbacks callbacks_;
+  ClientSessionCallbacks callbacks_;  // written before Start(), read-only after
 
   std::atomic<bool> stop_{false};
   std::atomic<bool> started_{false};

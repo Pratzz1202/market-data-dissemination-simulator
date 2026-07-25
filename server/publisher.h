@@ -10,7 +10,6 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -28,8 +27,17 @@ class ClientConnection {
 
   const std::string& ClientId() const;
 
+  // Incrementals respect the per-instrument bound and are rejected when the
+  // queue is full. Non-incremental messages (control, snapshots) bypass the
+  // bound: they are rare and small, and dropping them loses pongs, errors,
+  // and unsubscribe confirmations.
   bool Enqueue(const std::string& instrument_id, const mdd::ServerMsg& msg, bool is_incremental);
+
+  // Replaces everything pending for the instrument with the given message
+  // (reset-snapshot semantics: queued incrementals are stale once a newer
+  // snapshot supersedes them).
   bool EnqueueReset(const std::string& instrument_id, const mdd::ServerMsg& msg);
+
   void Close();
   bool IsClosed() const;
 
@@ -38,10 +46,14 @@ class ClientConnection {
   void ClearDirty(const std::string& instrument_id);
   uint64_t IncrementDropped(const std::string& instrument_id);
 
+  // Blocks until a message is available; returns false once closed and
+  // drained. Never yields an empty message.
+  bool PopNext(mdd::ServerMsg* msg);
+  uint64_t TotalPending() const;
+
   void WriteLoop();
 
  private:
-  bool PopNext(mdd::ServerMsg* msg);
   uint64_t TotalPendingLocked() const;
 
   const std::string client_id_;
@@ -66,6 +78,7 @@ class Publisher {
       std::function<mdd::Snapshot(const std::string&, bool, const std::string&)>;
 
   explicit Publisher(SubscriptionManager* subscriptions);
+  ~Publisher();
 
   std::shared_ptr<ClientConnection> RegisterClient(
       const std::string& client_id,

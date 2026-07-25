@@ -10,12 +10,24 @@
 
 #include "client/client_session.h"
 #include "common/logging.h"
+#include "common/parse.h"
 
 namespace {
 
 std::atomic<bool> g_stop{false};
 
 void HandleSignal(int /*signal*/) { g_stop.store(true); }
+
+// Installed without SA_RESTART so a Ctrl-C interrupts the blocking stdin read
+// in interactive mode instead of hanging until the next Enter.
+void InstallSignalHandlers() {
+  struct sigaction action{};
+  action.sa_handler = HandleSignal;
+  sigemptyset(&action.sa_mask);
+  action.sa_flags = 0;
+  sigaction(SIGINT, &action, nullptr);
+  sigaction(SIGTERM, &action, nullptr);
+}
 
 struct CliOptions {
   std::string host = "localhost:50051";
@@ -26,6 +38,8 @@ struct CliOptions {
   uint32_t ping_interval_ms = 0;
   uint32_t duration_sec = 0;
   bool interactive = false;
+  bool quiet = false;
+  bool help = false;
 };
 
 bool ParseArgs(int argc, char** argv, CliOptions* options, std::string* error) {
@@ -40,6 +54,19 @@ bool ParseArgs(int argc, char** argv, CliOptions* options, std::string* error) {
       }
       return argv[++i];
     };
+    auto next_number = [&](auto* out) {
+      const char* value = next();
+      if (value == nullptr) {
+        return false;
+      }
+      if (!mdd::common::ParseNumber(value, out)) {
+        if (error != nullptr) {
+          *error = "invalid numeric value for " + arg + ": " + value;
+        }
+        return false;
+      }
+      return true;
+    };
 
     if (arg == "--host") {
       const char* value = next();
@@ -48,33 +75,37 @@ bool ParseArgs(int argc, char** argv, CliOptions* options, std::string* error) {
     } else if (arg == "--subscribe") {
       const char* value = next();
       if (value == nullptr) return false;
-      options->instruments.push_back(value);
+      options->instruments.emplace_back(value);
     } else if (arg == "--depth") {
-      const char* value = next();
-      if (value == nullptr) return false;
-      options->depth = static_cast<uint32_t>(std::stoul(value));
+      if (!next_number(&options->depth)) return false;
     } else if (arg == "--no_reconnect") {
       options->auto_reconnect = false;
     } else if (arg == "--reconnect_delay_ms") {
-      const char* value = next();
-      if (value == nullptr) return false;
-      options->reconnect_delay_ms = static_cast<uint32_t>(std::stoul(value));
+      if (!next_number(&options->reconnect_delay_ms)) return false;
     } else if (arg == "--ping_interval_ms") {
-      const char* value = next();
-      if (value == nullptr) return false;
-      options->ping_interval_ms = static_cast<uint32_t>(std::stoul(value));
+      if (!next_number(&options->ping_interval_ms)) return false;
     } else if (arg == "--duration_sec") {
-      const char* value = next();
-      if (value == nullptr) return false;
-      options->duration_sec = static_cast<uint32_t>(std::stoul(value));
+      if (!next_number(&options->duration_sec)) return false;
     } else if (arg == "--interactive") {
       options->interactive = true;
+    } else if (arg == "--quiet") {
+      options->quiet = true;
+    } else if (arg == "--help") {
+      options->help = true;
+      return true;
     } else {
       if (error != nullptr) {
         *error = "unknown arg: " + arg;
       }
       return false;
     }
+  }
+
+  if (options->interactive && options->duration_sec > 0) {
+    if (error != nullptr) {
+      *error = "--interactive and --duration_sec are mutually exclusive";
+    }
+    return false;
   }
 
   if (options->instruments.empty() && !options->interactive) {
@@ -93,7 +124,10 @@ void PrintUsage() {
             << "  --duration_sec <n>\n"
             << "  --ping_interval_ms <n>\n"
             << "  --interactive\n"
-            << "  --no_reconnect\n";
+            << "  --no_reconnect\n"
+            << "  --reconnect_delay_ms <n>\n"
+            << "  --quiet                    suppress per-update logs\n"
+            << "  --help\n";
 }
 
 void PrintInteractiveHelp() {
@@ -118,14 +152,24 @@ int main(int argc, char** argv) {
     PrintUsage();
     return 1;
   }
+  if (options.help) {
+    PrintUsage();
+    return 0;
+  }
 
-  std::signal(SIGINT, HandleSignal);
-  std::signal(SIGTERM, HandleSignal);
+  InstallSignalHandlers();
+
+  // The standalone client is a human-watched demo tool: per-update activity
+  // is the point, so debug-level logging is on unless --quiet.
+  if (!options.quiet) {
+    mdd::common::Logger::Instance().SetMinLevel(mdd::common::LogLevel::kDebug);
+  }
 
   mdd::client::ClientSessionOptions session_options;
   session_options.target = options.host;
   session_options.auto_reconnect = options.auto_reconnect;
   session_options.reconnect_delay_ms = options.reconnect_delay_ms;
+  session_options.verbose = !options.quiet;
 
   mdd::client::ClientSession session(session_options);
   session.Start();
@@ -138,7 +182,7 @@ int main(int argc, char** argv) {
   }
 
   std::thread command_thread;
-  if (options.interactive && options.duration_sec == 0) {
+  if (options.interactive) {
     PrintInteractiveHelp();
     command_thread = std::thread([&] {
       std::string line;

@@ -5,6 +5,12 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Without an explicit build type CMake emits no optimization flags at all,
+# which silently invalidates any benchmark numbers.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
 option(MDD_SIM_ENABLE_ASAN "Enable AddressSanitizer" OFF)
 option(MDD_SIM_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
 
@@ -18,8 +24,16 @@ if(MDD_SIM_ENABLE_UBSAN)
   add_link_options(-fsanitize=undefined)
 endif()
 
-set(protobuf_MODULE_COMPATIBLE TRUE)
-find_package(Protobuf REQUIRED)
+# Prefer protobuf's own CMake package config (Homebrew, vcpkg). Loading the
+# FindProtobuf module first and letting gRPC's config re-import the protobuf
+# config afterwards defines the protobuf:: targets twice and fails to
+# configure. Fall back to the module only for distros that ship no config
+# (Ubuntu apt).
+find_package(Protobuf CONFIG QUIET)
+if(NOT Protobuf_FOUND)
+  set(protobuf_MODULE_COMPATIBLE TRUE)
+  find_package(Protobuf REQUIRED)
+endif()
 find_package(gRPC CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 
@@ -107,4 +121,16 @@ if(BUILD_TESTING)
   add_executable(test_replay_determinism tests/test_replay_determinism.cpp)
   target_link_libraries(test_replay_determinism PRIVATE mdd_server_lib mdd_common)
   add_test(NAME test_replay_determinism COMMAND test_replay_determinism)
+
+  add_executable(test_publisher tests/test_publisher.cpp)
+  target_link_libraries(test_publisher PRIVATE mdd_server_lib)
+  add_test(NAME test_publisher COMMAND test_publisher)
+
+  add_executable(test_subscription_manager tests/test_subscription_manager.cpp)
+  target_link_libraries(test_subscription_manager PRIVATE mdd_server_lib)
+  add_test(NAME test_subscription_manager COMMAND test_subscription_manager)
+
+  add_executable(test_config_loader tests/test_config_loader.cpp)
+  target_link_libraries(test_config_loader PRIVATE mdd_server_lib)
+  add_test(NAME test_config_loader COMMAND test_config_loader)
 endif()

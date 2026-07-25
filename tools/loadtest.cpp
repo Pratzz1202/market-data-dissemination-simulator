@@ -9,11 +9,11 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <string>
 #include <thread>
@@ -23,6 +23,7 @@
 #include "common/config_loader.h"
 #include "common/logging.h"
 #include "common/metrics.h"
+#include "common/parse.h"
 #include "server/instrument_config.h"
 #include "server/market_data_service.h"
 
@@ -33,16 +34,19 @@ struct CliOptions {
   std::string server_metrics_endpoint;
   uint32_t clients = 10;
   uint32_t duration_sec = 30;
+  uint32_t warmup_sec = 1;
   uint32_t depth = 10;
   uint32_t incremental_processing_delay_ms = 0;
   std::vector<std::string> instruments;
 
   std::string inprocess_config;
+  uint32_t synthetic_instruments = 0;
   uint64_t seed = 123;
   uint32_t drop_every_n = 0;
   size_t queue_limit_per_instrument = 256;
 
   bool verbose_logs = false;
+  bool help = false;
 };
 
 struct InProcessHarness {
@@ -56,7 +60,24 @@ struct InProcessHarness {
       return false;
     }
 
-    const mdd::server::RuntimeConfig runtime_config = mdd::server::BuildRuntimeConfig(config_proto);
+    mdd::server::RuntimeConfig runtime_config = mdd::server::BuildRuntimeConfig(config_proto);
+
+    // Multi-instrument scenarios replicate the first configured instrument
+    // instead of requiring hundreds of copy-pasted JSON blocks.
+    if (options.synthetic_instruments > 0) {
+      const mdd::server::InstrumentRuntimeConfig prototype = runtime_config.instruments.front();
+      runtime_config.instruments.clear();
+      runtime_config.instruments.reserve(options.synthetic_instruments);
+      for (uint32_t i = 0; i < options.synthetic_instruments; ++i) {
+        mdd::server::InstrumentRuntimeConfig instrument = prototype;
+        char suffix[16];
+        std::snprintf(suffix, sizeof(suffix), "-%03u", i + 1);
+        instrument.instrument_id = prototype.instrument_id + suffix;
+        instrument.symbol = prototype.symbol + suffix;
+        instrument.base_price = prototype.base_price + static_cast<int64_t>(i) * 100;
+        runtime_config.instruments.push_back(std::move(instrument));
+      }
+    }
 
     if (instruments != nullptr && instruments->empty()) {
       for (const auto& instrument : runtime_config.instruments) {
@@ -130,6 +151,19 @@ bool ParseArgs(int argc, char** argv, CliOptions* options, std::string* error) {
       }
       return argv[++i];
     };
+    auto next_number = [&](auto* out) {
+      const char* value = next();
+      if (value == nullptr) {
+        return false;
+      }
+      if (!mdd::common::ParseNumber(value, out)) {
+        if (error != nullptr) {
+          *error = "invalid numeric value for " + arg + ": " + value;
+        }
+        return false;
+      }
+      return true;
+    };
 
     if (arg == "--host") {
       const char* value = next();
@@ -140,49 +174,56 @@ bool ParseArgs(int argc, char** argv, CliOptions* options, std::string* error) {
       if (value == nullptr) return false;
       options->server_metrics_endpoint = value;
     } else if (arg == "--clients") {
-      const char* value = next();
-      if (value == nullptr) return false;
-      options->clients = static_cast<uint32_t>(std::stoul(value));
+      if (!next_number(&options->clients)) return false;
     } else if (arg == "--duration_sec") {
-      const char* value = next();
-      if (value == nullptr) return false;
-      options->duration_sec = static_cast<uint32_t>(std::stoul(value));
+      if (!next_number(&options->duration_sec)) return false;
+    } else if (arg == "--warmup_sec") {
+      if (!next_number(&options->warmup_sec)) return false;
     } else if (arg == "--depth") {
-      const char* value = next();
-      if (value == nullptr) return false;
-      options->depth = static_cast<uint32_t>(std::stoul(value));
+      if (!next_number(&options->depth)) return false;
     } else if (arg == "--incremental_processing_delay_ms") {
-      const char* value = next();
-      if (value == nullptr) return false;
-      options->incremental_processing_delay_ms = static_cast<uint32_t>(std::stoul(value));
+      if (!next_number(&options->incremental_processing_delay_ms)) return false;
     } else if (arg == "--instrument") {
       const char* value = next();
       if (value == nullptr) return false;
-      options->instruments.push_back(value);
+      options->instruments.emplace_back(value);
     } else if (arg == "--inprocess_config") {
       const char* value = next();
       if (value == nullptr) return false;
       options->inprocess_config = value;
+    } else if (arg == "--synthetic_instruments") {
+      if (!next_number(&options->synthetic_instruments)) return false;
     } else if (arg == "--seed") {
-      const char* value = next();
-      if (value == nullptr) return false;
-      options->seed = static_cast<uint64_t>(std::stoull(value));
+      if (!next_number(&options->seed)) return false;
     } else if (arg == "--drop_every_n") {
-      const char* value = next();
-      if (value == nullptr) return false;
-      options->drop_every_n = static_cast<uint32_t>(std::stoul(value));
+      if (!next_number(&options->drop_every_n)) return false;
     } else if (arg == "--queue_limit_per_instrument") {
-      const char* value = next();
-      if (value == nullptr) return false;
-      options->queue_limit_per_instrument = static_cast<size_t>(std::stoull(value));
+      if (!next_number(&options->queue_limit_per_instrument)) return false;
     } else if (arg == "--verbose_logs") {
       options->verbose_logs = true;
+    } else if (arg == "--help") {
+      options->help = true;
+      return true;
     } else {
       if (error != nullptr) {
         *error = "unknown arg: " + arg;
       }
       return false;
     }
+  }
+
+  if (options->duration_sec == 0) {
+    if (error != nullptr) {
+      *error = "--duration_sec must be > 0";
+    }
+    return false;
+  }
+
+  if (options->synthetic_instruments > 0 && options->inprocess_config.empty()) {
+    if (error != nullptr) {
+      *error = "--synthetic_instruments requires --inprocess_config";
+    }
+    return false;
   }
 
   if (options->inprocess_config.empty() && options->instruments.empty()) {
@@ -199,15 +240,18 @@ void PrintUsage() {
   std::cerr << "Usage: mdd_loadtest [--host <host:port> | --inprocess_config <path>] "
             << "[options]\n"
             << "  --instrument <id>   repeatable, optional with --inprocess_config\n"
+            << "  --synthetic_instruments <n>   replicate first config instrument n times\n"
             << "  --server_metrics_endpoint <http://host:port/metrics>\n"
             << "  --clients <n>\n"
-            << "  --duration_sec <n>\n"
+            << "  --duration_sec <n>   measurement window (after warmup)\n"
+            << "  --warmup_sec <n>     excluded from all measurements (default 1)\n"
             << "  --depth <n>\n"
             << "  --incremental_processing_delay_ms <ms>\n"
             << "  --seed <n>\n"
             << "  --drop_every_n <n>\n"
             << "  --queue_limit_per_instrument <n>\n"
-            << "  --verbose_logs\n";
+            << "  --verbose_logs\n"
+            << "  --help\n";
 }
 
 struct HttpEndpoint {
@@ -341,8 +385,8 @@ bool FetchHttpBody(const HttpEndpoint& endpoint, std::string* body, std::string*
   return true;
 }
 
-std::optional<uint64_t> ParsePrometheusCounter(const std::string& metrics_text,
-                                               const std::string& metric_name) {
+std::optional<uint64_t> ParsePrometheusValue(const std::string& metrics_text,
+                                             const std::string& metric_name) {
   const std::string prefix = metric_name + " ";
   size_t start = 0;
   while (start < metrics_text.size()) {
@@ -378,28 +422,28 @@ std::optional<mdd::common::MetricsSnapshot> FetchMetricsSnapshotFromEndpoint(
   }
 
   mdd::common::MetricsSnapshot snapshot;
-  if (const auto v = ParsePrometheusCounter(metrics_text, "connected_clients")) {
+  if (const auto v = ParsePrometheusValue(metrics_text, "mdd_connected_clients")) {
     snapshot.connected_clients = *v;
   }
-  if (const auto v = ParsePrometheusCounter(metrics_text, "total_snapshots")) {
+  if (const auto v = ParsePrometheusValue(metrics_text, "mdd_snapshots_total")) {
     snapshot.total_snapshots = *v;
   }
-  if (const auto v = ParsePrometheusCounter(metrics_text, "total_incrementals")) {
+  if (const auto v = ParsePrometheusValue(metrics_text, "mdd_incrementals_total")) {
     snapshot.total_incrementals = *v;
   }
-  if (const auto v = ParsePrometheusCounter(metrics_text, "incremental_rate_per_sec")) {
+  if (const auto v = ParsePrometheusValue(metrics_text, "mdd_incremental_rate_per_sec")) {
     snapshot.incremental_rate_per_sec = *v;
   }
-  if (const auto v = ParsePrometheusCounter(metrics_text, "total_resyncs")) {
+  if (const auto v = ParsePrometheusValue(metrics_text, "mdd_resyncs_total")) {
     snapshot.total_resyncs = *v;
   }
-  if (const auto v = ParsePrometheusCounter(metrics_text, "total_backpressure_drops")) {
+  if (const auto v = ParsePrometheusValue(metrics_text, "mdd_backpressure_drops_total")) {
     snapshot.total_backpressure_drops = *v;
   }
-  if (const auto v = ParsePrometheusCounter(metrics_text, "total_loss_simulated_drops")) {
+  if (const auto v = ParsePrometheusValue(metrics_text, "mdd_loss_simulated_drops_total")) {
     snapshot.total_loss_simulated_drops = *v;
   }
-  if (const auto v = ParsePrometheusCounter(metrics_text, "total_drops")) {
+  if (const auto v = ParsePrometheusValue(metrics_text, "mdd_drops_total")) {
     snapshot.total_drops = *v;
   } else {
     snapshot.total_drops = snapshot.total_backpressure_drops + snapshot.total_loss_simulated_drops;
@@ -408,13 +452,28 @@ std::optional<mdd::common::MetricsSnapshot> FetchMetricsSnapshotFromEndpoint(
   return snapshot;
 }
 
-uint64_t Percentile(std::vector<uint64_t> values, double pct) {
-  if (values.empty()) {
-    return 0;
+struct LatencySummary {
+  uint64_t p50 = 0;
+  uint64_t p99 = 0;
+  uint64_t p999 = 0;
+  size_t samples = 0;
+};
+
+// Sorts in place; percentiles use the nearest-rank method on (n - 1).
+LatencySummary Summarize(std::vector<uint64_t>* values) {
+  LatencySummary summary;
+  summary.samples = values->size();
+  if (values->empty()) {
+    return summary;
   }
-  std::sort(values.begin(), values.end());
-  const size_t idx = static_cast<size_t>(pct * (values.size() - 1));
-  return values[idx];
+  std::sort(values->begin(), values->end());
+  const auto at = [&](double pct) {
+    return (*values)[static_cast<size_t>(pct * static_cast<double>(values->size() - 1))];
+  };
+  summary.p50 = at(0.50);
+  summary.p99 = at(0.99);
+  summary.p999 = at(0.999);
+  return summary;
 }
 
 void UpdatePeak(std::atomic<uint64_t>* peak, uint64_t value) {
@@ -422,6 +481,14 @@ void UpdatePeak(std::atomic<uint64_t>* peak, uint64_t value) {
   while (value > current && !peak->compare_exchange_weak(current, value)) {
   }
 }
+
+// Written by exactly one session read thread while running; main reads only
+// after Stop() joins that thread, so no lock is needed and the measurement
+// path never contends across clients.
+struct SessionStats {
+  std::vector<uint64_t> incremental_latencies_ns;
+  std::vector<uint64_t> snapshot_latencies_ns;
+};
 
 }  // namespace
 
@@ -435,11 +502,17 @@ int main(int argc, char** argv) {
     PrintUsage();
     return 1;
   }
+  if (options.help) {
+    PrintUsage();
+    return 0;
+  }
 
   std::ofstream null_log;
   if (!options.verbose_logs) {
     null_log.open("/dev/null");
     mdd::common::Logger::Instance().SetOutput(&null_log);
+  } else {
+    mdd::common::Logger::Instance().SetMinLevel(mdd::common::LogLevel::kDebug);
   }
 
   InProcessHarness inprocess;
@@ -456,16 +529,14 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  std::atomic<bool> collecting{false};
   std::atomic<uint64_t> incrementals{0};
   std::atomic<uint64_t> resyncs{0};
   std::atomic<uint64_t> errors{0};
   std::atomic<uint64_t> connected{0};
   std::atomic<uint64_t> peak_connected{0};
-  std::mutex incremental_latency_mu;
-  std::vector<uint64_t> incremental_latencies_ns;
-  std::mutex snapshot_latency_mu;
-  std::vector<uint64_t> snapshot_latencies_ns;
 
+  std::vector<SessionStats> session_stats(options.clients);
   std::vector<std::unique_ptr<mdd::client::ClientSession>> sessions;
   sessions.reserve(options.clients);
 
@@ -483,22 +554,37 @@ int main(int argc, char** argv) {
 
     auto session = std::make_unique<mdd::client::ClientSession>(client_options);
 
+    SessionStats* stats = &session_stats[i];
     mdd::client::ClientSessionCallbacks callbacks;
-    callbacks.on_incremental = [&] { incrementals.fetch_add(1); };
-    callbacks.on_resync_requested = [&](const std::string&) { resyncs.fetch_add(1); };
-    callbacks.on_error = [&](const std::string&) { errors.fetch_add(1); };
+    callbacks.on_incremental = [&] {
+      if (collecting.load(std::memory_order_relaxed)) {
+        incrementals.fetch_add(1, std::memory_order_relaxed);
+      }
+    };
+    callbacks.on_resync_requested = [&](const std::string&) {
+      if (collecting.load(std::memory_order_relaxed)) {
+        resyncs.fetch_add(1, std::memory_order_relaxed);
+      }
+    };
+    callbacks.on_error = [&](const std::string&) {
+      if (collecting.load(std::memory_order_relaxed)) {
+        errors.fetch_add(1, std::memory_order_relaxed);
+      }
+    };
     callbacks.on_connected = [&] {
       const uint64_t current = connected.fetch_add(1) + 1;
       UpdatePeak(&peak_connected, current);
     };
     callbacks.on_disconnected = [&] { connected.fetch_sub(1); };
-    callbacks.on_incremental_latency_ns = [&](uint64_t ns) {
-      std::lock_guard<std::mutex> lock(incremental_latency_mu);
-      incremental_latencies_ns.push_back(ns);
+    callbacks.on_incremental_latency_ns = [&collecting, stats](uint64_t ns) {
+      if (collecting.load(std::memory_order_relaxed)) {
+        stats->incremental_latencies_ns.push_back(ns);
+      }
     };
-    callbacks.on_snapshot_latency_ns = [&](uint64_t ns) {
-      std::lock_guard<std::mutex> lock(snapshot_latency_mu);
-      snapshot_latencies_ns.push_back(ns);
+    callbacks.on_snapshot_latency_ns = [&collecting, stats](uint64_t ns) {
+      if (collecting.load(std::memory_order_relaxed)) {
+        stats->snapshot_latencies_ns.push_back(ns);
+      }
     };
     session->SetCallbacks(std::move(callbacks));
 
@@ -510,87 +596,103 @@ int main(int argc, char** argv) {
     sessions.push_back(std::move(session));
   }
 
+  if (options.warmup_sec > 0) {
+    std::this_thread::sleep_for(std::chrono::seconds(options.warmup_sec));
+  }
+
+  // Baseline for server-side counters so warmup churn (connection storms,
+  // initial snapshots) is excluded from the reported deltas.
+  std::optional<mdd::common::MetricsSnapshot> baseline;
+  if (!options.inprocess_config.empty()) {
+    baseline = mdd::common::GlobalMetrics().Snapshot();
+  } else if (!options.server_metrics_endpoint.empty()) {
+    std::string metrics_error;
+    baseline = FetchMetricsSnapshotFromEndpoint(options.server_metrics_endpoint, &metrics_error);
+    if (!baseline.has_value()) {
+      std::cerr << "warn: baseline metrics fetch failed: " << metrics_error << "\n";
+    }
+  }
+
+  collecting.store(true);
   const auto start = std::chrono::steady_clock::now();
   std::this_thread::sleep_for(std::chrono::seconds(options.duration_sec));
   const auto end = std::chrono::steady_clock::now();
+  collecting.store(false);
 
-  for (auto& session : sessions) {
-    session->Stop();
-  }
-
-  inprocess.Stop();
-
-  double elapsed_sec{0.0};
-  elapsed_sec = std::chrono::duration<double>(end - start).count();
-  const uint64_t total_incrementals = incrementals.load();
-  const double throughput = elapsed_sec > 0.0 ? total_incrementals / elapsed_sec : 0.0;
-
-  std::vector<uint64_t> incremental_latency_copy;
-  {
-    std::lock_guard<std::mutex> lock(incremental_latency_mu);
-    incremental_latency_copy = incremental_latencies_ns;
-  }
-
-  std::vector<uint64_t> snapshot_latency_copy;
-  {
-    std::lock_guard<std::mutex> lock(snapshot_latency_mu);
-    snapshot_latency_copy = snapshot_latencies_ns;
-  }
-
-  uint64_t inc_p50{0};
-  uint64_t inc_p99{0};
-  uint64_t inc_p999{0};
-  uint64_t snap_p50{0};
-  uint64_t snap_p99{0};
-  uint64_t snap_p999{0};
-
-  if (!incremental_latency_copy.empty()) {
-    inc_p50 = Percentile(incremental_latency_copy, 0.50);
-    inc_p99 = Percentile(incremental_latency_copy, 0.99);
-    inc_p999 = Percentile(incremental_latency_copy, 0.999);
-  }
-
-  if (!snapshot_latency_copy.empty()) {
-    snap_p50 = Percentile(snapshot_latency_copy, 0.50);
-    snap_p99 = Percentile(snapshot_latency_copy, 0.99);
-    snap_p999 = Percentile(snapshot_latency_copy, 0.999);
-  }
-
-  auto metrics = mdd::common::GlobalMetrics().Snapshot();
-  if (!options.server_metrics_endpoint.empty()) {
+  std::optional<mdd::common::MetricsSnapshot> final_metrics;
+  if (!options.inprocess_config.empty()) {
+    final_metrics = mdd::common::GlobalMetrics().Snapshot();
+  } else if (!options.server_metrics_endpoint.empty()) {
     std::string metrics_error;
-    const auto remote_metrics =
+    final_metrics =
         FetchMetricsSnapshotFromEndpoint(options.server_metrics_endpoint, &metrics_error);
-    if (remote_metrics.has_value()) {
-      metrics = *remote_metrics;
-    } else {
+    if (!final_metrics.has_value()) {
       std::cerr << "warn: failed to fetch server metrics from " << options.server_metrics_endpoint
                 << ": " << metrics_error << "\n";
     }
   }
 
+  for (auto& session : sessions) {
+    session->Stop();
+  }
+  inprocess.Stop();
+
+  const double elapsed_sec = std::chrono::duration<double>(end - start).count();
+  const uint64_t total_incrementals = incrementals.load();
+  const double throughput =
+      elapsed_sec > 0.0 ? static_cast<double>(total_incrementals) / elapsed_sec : 0.0;
+
+  std::vector<uint64_t> incremental_latencies;
+  std::vector<uint64_t> snapshot_latencies;
+  for (auto& stats : session_stats) {
+    incremental_latencies.insert(incremental_latencies.end(),
+                                 stats.incremental_latencies_ns.begin(),
+                                 stats.incremental_latencies_ns.end());
+    snapshot_latencies.insert(snapshot_latencies.end(), stats.snapshot_latencies_ns.begin(),
+                              stats.snapshot_latencies_ns.end());
+  }
+  const LatencySummary inc = Summarize(&incremental_latencies);
+  const LatencySummary snap = Summarize(&snapshot_latencies);
+
   std::cout << "=== mdd_loadtest summary ===\n";
   std::cout << "mode=" << (options.inprocess_config.empty() ? "remote" : "inprocess")
             << " host=" << options.host << " clients=" << options.clients
             << " instruments=" << options.instruments.size() << " depth=" << options.depth
-            << " duration_sec=" << options.duration_sec
+            << " warmup_sec=" << options.warmup_sec << " duration_sec=" << options.duration_sec
             << " incremental_processing_delay_ms=" << options.incremental_processing_delay_ms
-            << " server_metrics_endpoint="
-            << (options.server_metrics_endpoint.empty() ? "<local>"
-                                                        : options.server_metrics_endpoint)
             << "\n";
-  std::cout << "throughput_incrementals_per_sec=" << throughput << "\n";
-  std::cout << "incremental_latency_ns_p50=" << inc_p50 << " incremental_latency_ns_p99=" << inc_p99
-            << " incremental_latency_ns_p999=" << inc_p999 << "\n";
-  std::cout << "snapshot_latency_ns_p50=" << snap_p50 << " snapshot_latency_ns_p99=" << snap_p99
-            << " snapshot_latency_ns_p999=" << snap_p999 << "\n";
-  std::cout << "total_incrementals=" << total_incrementals << " total_resyncs=" << resyncs.load()
-            << " total_errors=" << errors.load()
-            << " total_backpressure_drops=" << metrics.total_backpressure_drops
-            << " total_loss_simulated_drops=" << metrics.total_loss_simulated_drops
-            << " total_drops=" << metrics.total_drops
-            << " peak_connected_clients=" << peak_connected.load() << "\n";
-  std::cout << "server_incremental_rate_per_sec=" << metrics.incremental_rate_per_sec << "\n";
+  std::cout << "delivered_incrementals_per_sec=" << throughput
+            << "  (sum across all clients; per-client rate = this / clients)\n";
+  std::cout << "incremental_latency_ns p50=" << inc.p50 << " p99=" << inc.p99
+            << " p999=" << inc.p999 << " samples=" << inc.samples << "\n";
+  std::cout << "snapshot_latency_ns p50=" << snap.p50 << " p99=" << snap.p99
+            << " p999=" << snap.p999 << " samples=" << snap.samples << "\n";
+  std::cout << "client_counters delivered=" << total_incrementals << " resyncs=" << resyncs.load()
+            << " errors=" << errors.load() << " peak_connected=" << peak_connected.load() << "\n";
+
+  if (final_metrics.has_value()) {
+    const auto& current = *final_metrics;
+    if (baseline.has_value()) {
+      std::cout << "server_counters_delta backpressure_drops="
+                << current.total_backpressure_drops - baseline->total_backpressure_drops
+                << " loss_simulated_drops="
+                << current.total_loss_simulated_drops - baseline->total_loss_simulated_drops
+                << " resyncs_served=" << current.total_resyncs - baseline->total_resyncs
+                << " incrementals_enqueued="
+                << current.total_incrementals - baseline->total_incrementals << "\n";
+    } else {
+      std::cout << "server_counters_absolute backpressure_drops="
+                << current.total_backpressure_drops
+                << " loss_simulated_drops=" << current.total_loss_simulated_drops
+                << " resyncs_served=" << current.total_resyncs
+                << " incrementals_enqueued=" << current.total_incrementals
+                << "  (no baseline; includes pre-run history)\n";
+    }
+    std::cout << "server_incremental_rate_per_sec=" << current.incremental_rate_per_sec << "\n";
+  } else {
+    std::cout << "server_counters=unavailable (remote mode without "
+                 "--server_metrics_endpoint)\n";
+  }
 
   return 0;
 }

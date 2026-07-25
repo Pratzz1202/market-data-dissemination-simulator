@@ -2,9 +2,11 @@
 
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <mutex>
 #include <string>
-#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace mdd::common {
 
@@ -21,16 +23,25 @@ struct MetricsSnapshot {
 
 class MetricsRegistry {
  public:
+  using ClientLagProvider = std::function<std::vector<std::pair<std::string, uint64_t>>()>;
+
+  MetricsRegistry();
+
   void SetConnectedClients(uint64_t v);
   void IncrementSnapshots(uint64_t v = 1);
   void IncrementIncrementals(uint64_t v = 1);
   void IncrementResyncs(uint64_t v = 1);
   void IncrementBackpressureDrops(uint64_t v = 1);
   void IncrementLossSimulatedDrops(uint64_t v = 1);
-  void IncrementDrops(uint64_t v = 1);  // compatibility alias to backpressure drops
-  void SetClientLag(const std::string& client_id, uint64_t lag);
-  void RemoveClientLag(const std::string& client_id);
 
+  // Client lag is sampled through this provider at scrape time only, so the
+  // publish hot path never touches registry state beyond atomic counters.
+  // Pass nullptr to detach (the provider's owner must do so before dying).
+  void SetClientLagProvider(ClientLagProvider provider);
+
+  // The incremental rate is derived from counter deltas between Snapshot()
+  // calls (windows shorter than 100ms reuse the previous value). The first
+  // call reports the average rate since registry construction.
   MetricsSnapshot Snapshot() const;
   std::string ToPrometheusText() const;
 
@@ -38,14 +49,17 @@ class MetricsRegistry {
   std::atomic<uint64_t> connected_clients_{0};
   std::atomic<uint64_t> total_snapshots_{0};
   std::atomic<uint64_t> total_incrementals_{0};
-  std::atomic<uint64_t> incremental_rate_per_sec_{0};
-  std::atomic<uint64_t> rate_window_start_ns_{0};
-  std::atomic<uint64_t> rate_window_count_{0};
   std::atomic<uint64_t> total_resyncs_{0};
   std::atomic<uint64_t> total_backpressure_drops_{0};
   std::atomic<uint64_t> total_loss_simulated_drops_{0};
-  mutable std::mutex lag_mu_;
-  std::unordered_map<std::string, uint64_t> client_lag_;
+
+  mutable std::mutex rate_mu_;
+  mutable uint64_t rate_window_start_ns_ = 0;
+  mutable uint64_t rate_window_total_ = 0;
+  mutable uint64_t last_rate_per_sec_ = 0;
+
+  mutable std::mutex provider_mu_;
+  ClientLagProvider client_lag_provider_;
 };
 
 MetricsRegistry& GlobalMetrics();
