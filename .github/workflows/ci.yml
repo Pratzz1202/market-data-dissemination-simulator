@@ -27,14 +27,17 @@ jobs:
             -not -path './build/*' -not -path './build-*/*' \
             | xargs clang-format --dry-run --Werror
 
+      - name: Build
+        run: cmake --build build -j
+
+      # Runs after Build: the protoc-generated headers in build/generated/
+      # must exist or clang-tidy's broken-AST error recovery produces phantom
+      # findings (e.g. bugprone-branch-clone on non-identical branches).
       # Enforced: .clang-tidy sets WarningsAsErrors '*', so violations fail CI.
       - name: clang-tidy check
         run: |
           clang-tidy -p build --quiet \
             server/*.cpp client/*.cpp common/*.cpp tools/*.cpp
-
-      - name: Build
-        run: cmake --build build -j
 
       - name: Test
         run: ctest --test-dir build --output-on-failure
