@@ -39,7 +39,12 @@ Compatibility policy:
 
 ## Snapshot Semantics
 
-Snapshot is full published state at sequence `snapshot_seq`.
+A snapshot carries the **full book** at sequence `snapshot_seq`. Snapshots
+are never depth-truncated: incrementals address the whole book, so a partial
+snapshot would let the client book silently diverge the moment a remove
+uncovers a level the snapshot never contained (sequence numbers would stay
+valid and no resync would fire). `requested_depth` on `Subscribe` is a
+client-side display preference only.
 
 Client action:
 
@@ -80,6 +85,13 @@ Common server error codes:
 - `NOT_SUBSCRIBED`
 - `UNSUPPORTED_SCHEMA`
 - `EMPTY_MESSAGE`
+
+## Delivery Guarantees
+
+- Incrementals may be dropped under backpressure (bounded per-instrument
+  queues); the affected instrument recovers via a reset snapshot.
+- Control messages (`Error`, `Pong`, `Unsubscribed`, `ServerHello`) are never
+  dropped by queue bounds.
 
 ## Recovery
 
