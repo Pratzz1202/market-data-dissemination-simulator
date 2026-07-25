@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  build-test:
+  build-test-linux:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,13 +24,14 @@ jobs:
       - name: clang-format check
         run: |
           find . -type f \( -name '*.h' -o -name '*.cpp' \) \
-            -not -path './build/*' -not -path './build-asan/*' \
+            -not -path './build/*' -not -path './build-*/*' \
             | xargs clang-format --dry-run --Werror
 
+      # Enforced: .clang-tidy sets WarningsAsErrors '*', so violations fail CI.
       - name: clang-tidy check
         run: |
-          clang-tidy -p build server/main.cpp server/market_data_service.cpp \
-            client/main.cpp client/client_session.cpp tools/loadtest.cpp || true
+          clang-tidy -p build --quiet \
+            server/*.cpp client/*.cpp common/*.cpp tools/*.cpp
 
       - name: Build
         run: cmake --build build -j
@@ -41,6 +42,34 @@ jobs:
       - name: Benchmark smoke
         run: |
           ./build/mdd_loadtest --inprocess_config ./instruments.json --clients 2 --duration_sec 2
+
+      - name: Record/replay smoke
+        run: |
+          ./build/mdd_server --config ./instruments.json --record_path /tmp/ci.record &
+          SERVER_PID=$!
+          sleep 3
+          kill -TERM "$SERVER_PID"
+          wait "$SERVER_PID"
+          ./build/mdd_replay --record_path /tmp/ci.record --strict
+
+  # macOS builds against Homebrew's protobuf/gRPC package configs — the exact
+  # setup that a Linux-only pipeline once let rot into an unlinkable state.
+  build-test-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: brew install cmake ninja grpc protobuf
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
 
   sanitizer-smoke:
     runs-on: ubuntu-latest

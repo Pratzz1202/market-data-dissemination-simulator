@@ -1,9 +1,19 @@
+# High-signal checks only. Broad families like cppcoreguidelines-* and
+# readability-* drown real findings in style noise for this codebase; the
+# checks below are the ones CI enforces (the step fails on violations).
 Checks: >
   bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-exception-escape,
   performance-*,
-  modernize-*,
-  readability-*,
-  cppcoreguidelines-*
-WarningsAsErrors: ''
+  -performance-avoid-endl,
+  modernize-use-nullptr,
+  modernize-use-override,
+  modernize-use-emplace,
+  modernize-loop-convert,
+  readability-container-size-empty,
+  readability-redundant-string-cstr,
+  readability-redundant-smartptr-get
+WarningsAsErrors: '*'
 HeaderFilterRegex: '^(common|server|client|tools|tests)/'
 FormatStyle: file
