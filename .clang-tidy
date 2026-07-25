@@ -1,10 +1,16 @@
 # High-signal checks only. Broad families like cppcoreguidelines-* and
 # readability-* drown real findings in style noise for this codebase; the
 # checks below are the ones CI enforces (the step fails on violations).
+#
+# bugprone-unchecked-optional-access is disabled: LLVM 18 (Ubuntu CI's
+# version) flags optional access on the line directly inside its own
+# has_value() guard; the check's dataflow analysis was reworked in later
+# LLVM releases. Re-enable if CI moves to clang-tidy >= 19.
 Checks: >
   bugprone-*,
   -bugprone-easily-swappable-parameters,
   -bugprone-exception-escape,
+  -bugprone-unchecked-optional-access,
   performance-*,
   -performance-avoid-endl,
   modernize-use-nullptr,
